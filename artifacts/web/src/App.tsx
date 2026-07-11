@@ -1,0 +1,70 @@
+import { Suspense, lazy } from "react";
+import { Redirect, Route, Switch } from "wouter";
+
+// Chaque page en lazy import des le depart (leçon BTP-ULTRA-OS : 185+ pages
+// chargees en eager causaient un bundle initial monolithique).
+const LoginPage = lazy(() => import("@/pages/login"));
+const DashboardPage = lazy(() => import("@/pages/dashboard"));
+const ChantiersPage = lazy(() => import("@/pages/chantiers/index"));
+const ChantierDetailPage = lazy(() => import("@/pages/chantiers/detail"));
+const ProspectsPage = lazy(() => import("@/pages/prospects/index"));
+const ProspectDetailPage = lazy(() => import("@/pages/prospects/detail"));
+const DevisPage = lazy(() => import("@/pages/devis/index"));
+const DevisDetailPage = lazy(() => import("@/pages/devis/detail"));
+const FacturesPage = lazy(() => import("@/pages/factures/index"));
+const FactureDetailPage = lazy(() => import("@/pages/factures/detail"));
+const DepensesPage = lazy(() => import("@/pages/depenses/index"));
+const CommandesPage = lazy(() => import("@/pages/commandes/index"));
+const SituationsPage = lazy(() => import("@/pages/situations/index"));
+const ComptabilitePage = lazy(() => import("@/pages/comptabilite/index"));
+const EquipePage = lazy(() => import("@/pages/equipe/index"));
+const PointagePage = lazy(() => import("@/pages/pointage/index"));
+const PlanningPersonnelPage = lazy(() => import("@/pages/planning-personnel/index"));
+const SousTraitantsPage = lazy(() => import("@/pages/sous-traitants/index"));
+const SecuritePage = lazy(() => import("@/pages/securite/index"));
+const ArticlesPage = lazy(() => import("@/pages/articles/index"));
+const OuvragesPage = lazy(() => import("@/pages/ouvrages/index"));
+const StockPage = lazy(() => import("@/pages/stock/index"));
+const DocumentsPage = lazy(() => import("@/pages/documents/index"));
+const VehiculesPage = lazy(() => import("@/pages/vehicules/index"));
+const AgendaCommercialPage = lazy(() => import("@/pages/agenda-commercial/index"));
+const RelancesPage = lazy(() => import("@/pages/relances/index"));
+const ImportIaPage = lazy(() => import("@/pages/import-ia/index"));
+
+export default function App() {
+  return (
+    <Suspense fallback={<div className="p-8 text-muted-foreground">Chargement...</div>}>
+      <Switch>
+        <Route path="/" component={() => <Redirect to="/login" />} />
+        <Route path="/login" component={LoginPage} />
+        <Route path="/dashboard" component={DashboardPage} />
+        <Route path="/chantiers" component={ChantiersPage} />
+        <Route path="/chantiers/:id" component={ChantierDetailPage} />
+        <Route path="/prospects" component={ProspectsPage} />
+        <Route path="/prospects/:id" component={ProspectDetailPage} />
+        <Route path="/devis" component={DevisPage} />
+        <Route path="/devis/:id" component={DevisDetailPage} />
+        <Route path="/factures" component={FacturesPage} />
+        <Route path="/factures/:id" component={FactureDetailPage} />
+        <Route path="/depenses" component={DepensesPage} />
+        <Route path="/commandes" component={CommandesPage} />
+        <Route path="/situations" component={SituationsPage} />
+        <Route path="/comptabilite" component={ComptabilitePage} />
+        <Route path="/equipe" component={EquipePage} />
+        <Route path="/pointage" component={PointagePage} />
+        <Route path="/planning-personnel" component={PlanningPersonnelPage} />
+        <Route path="/sous-traitants" component={SousTraitantsPage} />
+        <Route path="/securite" component={SecuritePage} />
+        <Route path="/articles" component={ArticlesPage} />
+        <Route path="/ouvrages" component={OuvragesPage} />
+        <Route path="/stock" component={StockPage} />
+        <Route path="/documents" component={DocumentsPage} />
+        <Route path="/vehicules" component={VehiculesPage} />
+        <Route path="/agenda-commercial" component={AgendaCommercialPage} />
+        <Route path="/relances" component={RelancesPage} />
+        <Route path="/import-ia" component={ImportIaPage} />
+        <Route>404 — Page introuvable</Route>
+      </Switch>
+    </Suspense>
+  );
+}
