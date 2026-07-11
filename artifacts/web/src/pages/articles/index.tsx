@@ -21,7 +21,7 @@ const EMPTY_FORM: ArticleInput = { code: "", libelle: "", unite: "u", categorie:
 export default function ArticlesPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: articles } = useQuery({
+  const { data: articles, isLoading } = useQuery({
     queryKey: ["articles", showArchived],
     queryFn: () => listArticles(showArchived),
   });
@@ -112,6 +112,8 @@ export default function ArticlesPage() {
           className="mb-4 max-w-sm"
         />
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -142,7 +144,7 @@ export default function ArticlesPage() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {!isLoading && filtered.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucun article pour le moment.</td></tr>
               )}
             </tbody>

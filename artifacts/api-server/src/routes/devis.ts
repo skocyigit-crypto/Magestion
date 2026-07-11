@@ -5,7 +5,7 @@ import { db, devisTable, facturesTable, licencesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
 import { nextNumero } from "../lib/numbering.js";
-import { renderDocumentPdfBuffer, streamDocumentPdf } from "../lib/pdf.js";
+import { licenceToPdfInfo, renderDocumentPdfBuffer, streamDocumentPdf } from "../lib/pdf.js";
 import { EmailNotConfiguredError, sendMail } from "../lib/mail.js";
 
 export const devisRouter = Router();
@@ -107,16 +107,7 @@ devisRouter.get("/:id/pdf", async (req, res) => {
     objet: devis.objet,
     montantHt: Number(devis.montantHt),
     tauxTva: Number(devis.tauxTva),
-    licence: {
-      nom: licence?.nom ?? "",
-      siret: licence?.siret ?? null,
-      adresse: licence?.adresse ?? null,
-      codePostal: licence?.codePostal ?? null,
-      ville: licence?.ville ?? null,
-      email: licence?.email ?? null,
-      telephone: licence?.telephone ?? null,
-      tvaIntracommunautaire: licence?.tvaIntracommunautaire ?? null,
-    },
+    licence: licenceToPdfInfo(licence),
   });
 });
 
@@ -226,16 +217,7 @@ devisRouter.post("/:id/statut", async (req, res) => {
         objet: updated.objet,
         montantHt: Number(updated.montantHt),
         tauxTva: Number(updated.tauxTva),
-        licence: {
-          nom: licence?.nom ?? "",
-          siret: licence?.siret ?? null,
-          adresse: licence?.adresse ?? null,
-          codePostal: licence?.codePostal ?? null,
-          ville: licence?.ville ?? null,
-          email: licence?.email ?? null,
-          telephone: licence?.telephone ?? null,
-          tvaIntracommunautaire: licence?.tvaIntracommunautaire ?? null,
-        },
+        licence: licenceToPdfInfo(licence),
       });
       await sendMail({
         to: updated.clientEmail,

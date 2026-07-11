@@ -1,5 +1,8 @@
 import PDFDocument from "pdfkit";
 import type { Response } from "express";
+import { join } from "node:path";
+import type { licencesTable } from "@magestion/db";
+import { STORAGE_DIR } from "./storage.js";
 
 interface LicenceInfo {
   nom: string;
@@ -10,6 +13,23 @@ interface LicenceInfo {
   email: string | null;
   telephone: string | null;
   tvaIntracommunautaire: string | null;
+  logoAbsolutePath: string | null;
+}
+
+// Mappe la ligne licence brute (DB) vers les champs attendus par le PDF —
+// partage entre devis.ts et factures.ts pour eviter 4 copies divergentes.
+export function licenceToPdfInfo(licence: typeof licencesTable.$inferSelect | undefined): LicenceInfo {
+  return {
+    nom: licence?.nom ?? "",
+    siret: licence?.siret ?? null,
+    adresse: licence?.adresse ?? null,
+    codePostal: licence?.codePostal ?? null,
+    ville: licence?.ville ?? null,
+    email: licence?.email ?? null,
+    telephone: licence?.telephone ?? null,
+    tvaIntracommunautaire: licence?.tvaIntracommunautaire ?? null,
+    logoAbsolutePath: licence?.logoChemin ? join(STORAGE_DIR, licence.logoChemin) : null,
+  };
 }
 
 interface DocumentPdfData {
@@ -39,6 +59,13 @@ function drawDocument(doc: PDFKit.PDFDocument, data: DocumentPdfData) {
   const montantTtc = data.montantHt + montantTva;
 
   // --- En-tete emetteur ---
+  if (data.licence.logoAbsolutePath) {
+    try {
+      doc.image(data.licence.logoAbsolutePath, 450, 45, { fit: [100, 60] });
+    } catch {
+      // Fichier logo illisible/corrompu : on ne bloque jamais la generation du PDF pour ca.
+    }
+  }
   doc.fontSize(16).font("Helvetica-Bold").text(data.licence.nom);
   doc.fontSize(9).font("Helvetica");
   if (data.licence.adresse) doc.text(data.licence.adresse);
@@ -49,6 +76,10 @@ function drawDocument(doc: PDFKit.PDFDocument, data: DocumentPdfData) {
   if (data.licence.email) doc.text(`Email : ${data.licence.email}`);
 
   // --- Titre document ---
+  // Garantit un espace minimal avant le titre, sinon un en-tete societe court
+  // (peu de champs renseignes) laisse le titre chevaucher le logo (zone fixe
+  // en haut a droite, hauteur jusqu'a 45+60=105).
+  if (data.licence.logoAbsolutePath) doc.y = Math.max(doc.y, 115);
   doc.moveDown(1.5);
   doc.fontSize(20).font("Helvetica-Bold").text(`${data.type === "DEVIS" ? "DEVIS" : "FACTURE"} N° ${data.numero}`, { align: "right" });
   doc.fontSize(10).font("Helvetica").text(`Date d'emission : ${fmtDate(data.dateEmission)}`, { align: "right" });

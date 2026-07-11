@@ -27,7 +27,7 @@ const STATUT_ORDER: VehicleStatut[] = ["DISPONIBLE", "EN_MISSION", "EN_MAINTENAN
 export default function VehiculesPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: vehicles } = useQuery({
+  const { data: vehicles, isLoading } = useQuery({
     queryKey: ["vehicles", showArchived],
     queryFn: () => listVehicles(showArchived),
   });
@@ -118,6 +118,8 @@ export default function VehiculesPage() {
           </Card>
         </div>
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {all.map((v: Vehicle) => (
             <Card key={v.id} className={v.active ? undefined : "opacity-60"}>
@@ -143,7 +145,7 @@ export default function VehiculesPage() {
               </CardContent>
             </Card>
           ))}
-          {all.length === 0 && <p className="text-muted-foreground">Aucun vehicule pour le moment.</p>}
+          {!isLoading && all.length === 0 && <p className="text-muted-foreground">Aucun vehicule pour le moment.</p>}
         </div>
       </div>
 

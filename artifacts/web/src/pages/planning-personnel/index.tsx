@@ -41,9 +41,10 @@ export default function PlanningPersonnelPage() {
   const debut = toDateStr(weekDays[0]);
   const fin = toDateStr(weekDays[6]);
 
-  const { data: employees } = useQuery({ queryKey: ["employees"], queryFn: () => listEmployees() });
+  const { data: employees, isLoading: employeesLoading } = useQuery({ queryKey: ["employees"], queryFn: () => listEmployees() });
   const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
-  const { data: affectations } = useQuery({ queryKey: ["planning-personnel", debut, fin], queryFn: () => listAffectations(debut, fin) });
+  const { data: affectations, isLoading: affectationsLoading } = useQuery({ queryKey: ["planning-personnel", debut, fin], queryFn: () => listAffectations(debut, fin) });
+  const isLoading = employeesLoading || affectationsLoading;
 
   const [modalCell, setModalCell] = useState<{ employeeId: string; date: string } | null>(null);
   const [editingAffectation, setEditingAffectation] = useState<Affectation | null>(null);
@@ -136,6 +137,8 @@ export default function PlanningPersonnelPage() {
           </Card>
         </div>
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -181,7 +184,7 @@ export default function PlanningPersonnelPage() {
                   })}
                 </tr>
               ))}
-              {(employees ?? []).length === 0 && (
+              {!isLoading && (employees ?? []).length === 0 && (
                 <tr><td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">Ajoutez des employes dans Equipe pour commencer.</td></tr>
               )}
             </tbody>

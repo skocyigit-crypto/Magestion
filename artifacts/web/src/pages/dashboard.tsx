@@ -10,11 +10,12 @@ import { listRelancesAFaire } from "@/lib/relances";
 const fmtEuro = (n: number) => `${n.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} €`;
 
 export default function DashboardPage() {
-  const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
-  const { data: factures } = useQuery({ queryKey: ["factures"], queryFn: listFactures });
-  const { data: depenses } = useQuery({ queryKey: ["depenses"], queryFn: () => listDepenses() });
-  const { data: devisList } = useQuery({ queryKey: ["devis"], queryFn: listDevis });
-  const { data: relances } = useQuery({ queryKey: ["relances", "a-faire"], queryFn: listRelancesAFaire });
+  const { data: projects, isLoading: projectsLoading } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
+  const { data: factures, isLoading: facturesLoading } = useQuery({ queryKey: ["factures"], queryFn: listFactures });
+  const { data: depenses, isLoading: depensesLoading } = useQuery({ queryKey: ["depenses"], queryFn: () => listDepenses() });
+  const { data: devisList, isLoading: devisLoading } = useQuery({ queryKey: ["devis"], queryFn: listDevis });
+  const { data: relances, isLoading: relancesLoading } = useQuery({ queryKey: ["relances", "a-faire"], queryFn: listRelancesAFaire });
+  const isLoading = projectsLoading || facturesLoading || depensesLoading || devisLoading || relancesLoading;
 
   const allProjects = projects ?? [];
   const allFactures = factures ?? [];
@@ -75,6 +76,7 @@ export default function DashboardPage() {
     <Layout>
       <div className="mx-auto max-w-6xl px-6 py-8">
         <h1 className="mb-6 text-2xl font-semibold">Tableau de bord</h1>
+        {isLoading && <p className="mb-4 text-muted-foreground">Chargement...</p>}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {kpis.map((kpi) => (
             <Card key={kpi.label}>

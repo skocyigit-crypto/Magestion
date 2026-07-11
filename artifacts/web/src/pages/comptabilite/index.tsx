@@ -15,12 +15,12 @@ export default function ComptabilitePage() {
   const [exercice, setExercice] = useState<string>("");
   const exerciceNum = exercice ? Number(exercice) : undefined;
 
-  const { data: journal } = useQuery({ queryKey: ["comptabilite", "journal"], queryFn: listJournal });
-  const { data: balance } = useQuery({
+  const { data: journal, isLoading: journalLoading } = useQuery({ queryKey: ["comptabilite", "journal"], queryFn: listJournal });
+  const { data: balance, isLoading: balanceLoading } = useQuery({
     queryKey: ["comptabilite", "balance", exerciceNum],
     queryFn: () => listBalance(exerciceNum),
   });
-  const { data: planComptable } = useQuery({ queryKey: ["comptabilite", "plan-comptable"], queryFn: listPlanComptable });
+  const { data: planComptable, isLoading: planComptableLoading } = useQuery({ queryKey: ["comptabilite", "plan-comptable"], queryFn: listPlanComptable });
   const [fecError, setFecError] = useState<string | null>(null);
 
   const totalDebit = useMemo(() => (journal ?? []).reduce((s, l) => s + Number(l.debit), 0), [journal]);
@@ -97,91 +97,100 @@ export default function ComptabilitePage() {
         </div>
 
         {tab === "journal" && (
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-3 py-2">N°</th>
-                  <th className="px-3 py-2">Journal</th>
-                  <th className="px-3 py-2">Compte</th>
-                  <th className="px-3 py-2">Piece</th>
-                  <th className="px-3 py-2">Libelle</th>
-                  <th className="px-3 py-2 text-right">Debit</th>
-                  <th className="px-3 py-2 text-right">Credit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(journal ?? []).map((l) => (
-                  <tr key={l.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="px-3 py-2">{l.ecritureNum}</td>
-                    <td className="px-3 py-2">{l.journalCode}</td>
-                    <td className="px-3 py-2">{l.compteNum} — {l.compteLib}</td>
-                    <td className="px-3 py-2">{l.pieceRef}</td>
-                    <td className="px-3 py-2">{l.ecritureLib}</td>
-                    <td className="px-3 py-2 text-right">{Number(l.debit) > 0 ? fmt(Number(l.debit)) : ""}</td>
-                    <td className="px-3 py-2 text-right">{Number(l.credit) > 0 ? fmt(Number(l.credit)) : ""}</td>
+          <>
+            {journalLoading && <p className="text-muted-foreground">Chargement...</p>}
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="px-3 py-2">N°</th>
+                    <th className="px-3 py-2">Journal</th>
+                    <th className="px-3 py-2">Compte</th>
+                    <th className="px-3 py-2">Piece</th>
+                    <th className="px-3 py-2">Libelle</th>
+                    <th className="px-3 py-2 text-right">Debit</th>
+                    <th className="px-3 py-2 text-right">Credit</th>
                   </tr>
-                ))}
-                {(journal ?? []).length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">Aucune ecriture pour le moment.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {(journal ?? []).map((l) => (
+                    <tr key={l.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-3 py-2">{l.ecritureNum}</td>
+                      <td className="px-3 py-2">{l.journalCode}</td>
+                      <td className="px-3 py-2">{l.compteNum} — {l.compteLib}</td>
+                      <td className="px-3 py-2">{l.pieceRef}</td>
+                      <td className="px-3 py-2">{l.ecritureLib}</td>
+                      <td className="px-3 py-2 text-right">{Number(l.debit) > 0 ? fmt(Number(l.debit)) : ""}</td>
+                      <td className="px-3 py-2 text-right">{Number(l.credit) > 0 ? fmt(Number(l.credit)) : ""}</td>
+                    </tr>
+                  ))}
+                  {!journalLoading && (journal ?? []).length === 0 && (
+                    <tr><td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">Aucune ecriture pour le moment.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         {tab === "balance" && (
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-3 py-2">Compte</th>
-                  <th className="px-3 py-2 text-right">Total debit</th>
-                  <th className="px-3 py-2 text-right">Total credit</th>
-                  <th className="px-3 py-2 text-right">Solde</th>
-                  <th className="px-3 py-2">Sens</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(balance ?? []).map((b) => (
-                  <tr key={b.compteNum} className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="px-3 py-2">{b.compteNum} — {b.compteLib}</td>
-                    <td className="px-3 py-2 text-right">{fmt(b.totalDebit)} €</td>
-                    <td className="px-3 py-2 text-right">{fmt(b.totalCredit)} €</td>
-                    <td className="px-3 py-2 text-right font-medium">{fmt(b.solde)} €</td>
-                    <td className="px-3 py-2">{b.sens === "DEBITEUR" ? "Debiteur" : "Crediteur"}</td>
+          <>
+            {balanceLoading && <p className="text-muted-foreground">Chargement...</p>}
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="px-3 py-2">Compte</th>
+                    <th className="px-3 py-2 text-right">Total debit</th>
+                    <th className="px-3 py-2 text-right">Total credit</th>
+                    <th className="px-3 py-2 text-right">Solde</th>
+                    <th className="px-3 py-2">Sens</th>
                   </tr>
-                ))}
-                {(balance ?? []).length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucune donnee pour le moment.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {(balance ?? []).map((b) => (
+                    <tr key={b.compteNum} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-3 py-2">{b.compteNum} — {b.compteLib}</td>
+                      <td className="px-3 py-2 text-right">{fmt(b.totalDebit)} €</td>
+                      <td className="px-3 py-2 text-right">{fmt(b.totalCredit)} €</td>
+                      <td className="px-3 py-2 text-right font-medium">{fmt(b.solde)} €</td>
+                      <td className="px-3 py-2">{b.sens === "DEBITEUR" ? "Debiteur" : "Crediteur"}</td>
+                    </tr>
+                  ))}
+                  {!balanceLoading && (balance ?? []).length === 0 && (
+                    <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucune donnee pour le moment.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         {tab === "plan" && (
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-3 py-2">Compte</th>
-                  <th className="px-3 py-2">Libelle</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(planComptable ?? []).map((c) => (
-                  <tr key={c.compteNum} className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="px-3 py-2">{c.compteNum}</td>
-                    <td className="px-3 py-2">{c.libelle}</td>
+          <>
+            {planComptableLoading && <p className="text-muted-foreground">Chargement...</p>}
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="px-3 py-2">Compte</th>
+                    <th className="px-3 py-2">Libelle</th>
                   </tr>
-                ))}
-                {(planComptable ?? []).length === 0 && (
-                  <tr><td colSpan={2} className="px-4 py-6 text-center text-muted-foreground">Aucun compte pour le moment.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {(planComptable ?? []).map((c) => (
+                    <tr key={c.compteNum} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-3 py-2">{c.compteNum}</td>
+                      <td className="px-3 py-2">{c.libelle}</td>
+                    </tr>
+                  ))}
+                  {!planComptableLoading && (planComptable ?? []).length === 0 && (
+                    <tr><td colSpan={2} className="px-4 py-6 text-center text-muted-foreground">Aucun compte pour le moment.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </Layout>

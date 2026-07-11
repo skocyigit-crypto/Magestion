@@ -20,7 +20,7 @@ const EMPTY_FORM: SousTraitantInput = { raisonSociale: "", siret: "" };
 export default function SousTraitantsPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: sousTraitants } = useQuery({
+  const { data: sousTraitants, isLoading } = useQuery({
     queryKey: ["sous-traitants", showArchived],
     queryFn: () => listSousTraitants(showArchived),
   });
@@ -106,6 +106,8 @@ export default function SousTraitantsPage() {
           </Card>
         </div>
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -136,7 +138,7 @@ export default function SousTraitantsPage() {
                   </td>
                 </tr>
               ))}
-              {all.length === 0 && (
+              {!isLoading && all.length === 0 && (
                 <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucun sous-traitant pour le moment.</td></tr>
               )}
             </tbody>

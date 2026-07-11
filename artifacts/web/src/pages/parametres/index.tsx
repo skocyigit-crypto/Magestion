@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getParametres, updateParametres, type ParametresInput } from "@/lib/parametres";
+import { fetchLogoBlobUrl, getParametres, updateParametres, uploadLogo, type ParametresInput } from "@/lib/parametres";
 
 const EMPTY_FORM: ParametresInput = { nom: "" };
 
@@ -16,6 +16,11 @@ export default function ParametresPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!parametres) return;
@@ -29,6 +34,12 @@ export default function ParametresPage() {
       telephone: parametres.telephone ?? undefined,
       tvaIntracommunautaire: parametres.tvaIntracommunautaire ?? undefined,
     });
+
+    if (parametres.logoChemin) {
+      fetchLogoBlobUrl().then((url) => setLogoUrl(url));
+    } else {
+      setLogoUrl(null);
+    }
   }, [parametres]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -47,6 +58,22 @@ export default function ParametresPage() {
     }
   }
 
+  async function handleLogoChange() {
+    const file = logoInputRef.current?.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    setLogoError(null);
+    try {
+      await uploadLogo(file);
+      await refetch();
+    } catch (err) {
+      setLogoError(err instanceof Error ? err.message : "Erreur lors du televersement");
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
+
   return (
     <Layout>
       <div className="mx-auto max-w-3xl px-6 py-8">
@@ -54,6 +81,27 @@ export default function ParametresPage() {
         <p className="mb-6 text-sm text-muted-foreground">
           Ces informations apparaissent sur les devis/factures PDF et comme expediteur des emails. Le SIRET est utilise pour l'export FEC.
         </p>
+
+        <Card className="mb-6">
+          <CardHeader><CardTitle>Logo</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo entreprise" className="h-16 max-w-40 rounded-md border border-border bg-white object-contain p-1" />
+              ) : (
+                <div className="flex h-16 w-40 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
+                  Aucun logo
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoChange} className="text-sm" />
+                <p className="text-xs text-muted-foreground">PNG, JPEG ou WEBP, 2 Mo max. Apparait sur les PDF devis/factures.</p>
+                {logoUploading && <p className="text-xs text-muted-foreground">Televersement...</p>}
+                {logoError && <p className="text-xs text-red-400">{logoError}</p>}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader><CardTitle>Coordonnees legales</CardTitle></CardHeader>

@@ -22,7 +22,7 @@ const EMPTY_FORM: IncidentInput = { titre: "", typeIncident: "", gravite: "FAIBL
 export default function SecuritePage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: incidents } = useQuery({
+  const { data: incidents, isLoading } = useQuery({
     queryKey: ["securite", showArchived],
     queryFn: () => listIncidents(showArchived),
   });
@@ -105,6 +105,8 @@ export default function SecuritePage() {
           </Card>
         </div>
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="flex flex-col gap-2">
           {all.map((i) => (
             <div key={i.id} className={`rounded-lg border border-border p-4 ${i.active ? "" : "opacity-60"}`}>
@@ -122,7 +124,7 @@ export default function SecuritePage() {
               </div>
             </div>
           ))}
-          {all.length === 0 && <p className="text-muted-foreground">Aucun incident signale.</p>}
+          {!isLoading && all.length === 0 && <p className="text-muted-foreground">Aucun incident signale.</p>}
         </div>
       </div>
 

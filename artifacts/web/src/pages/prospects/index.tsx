@@ -30,7 +30,7 @@ function scoreColor(score: number) {
 
 export default function ProspectsPage() {
   const queryClient = useQueryClient();
-  const { data: prospects } = useQuery({ queryKey: ["prospects"], queryFn: listProspects });
+  const { data: prospects, isLoading } = useQuery({ queryKey: ["prospects"], queryFn: listProspects });
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState<ProspectInput>(EMPTY_FORM);
@@ -92,6 +92,8 @@ export default function ProspectsPage() {
           </Card>
         </div>
 
+        {isLoading && <p className="mb-4 text-muted-foreground">Chargement...</p>}
+
         <div className="flex gap-4 overflow-x-auto pb-4">
           {PIPELINE_STAGES.map((stage) => (
             <div
@@ -134,7 +136,7 @@ export default function ProspectsPage() {
                     </Link>
                   </div>
                 ))}
-                {byStage(stage).length === 0 && (
+                {!isLoading && byStage(stage).length === 0 && (
                   <p className="text-xs text-muted-foreground">Aucun prospect</p>
                 )}
               </div>

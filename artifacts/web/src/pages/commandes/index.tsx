@@ -25,7 +25,7 @@ const EMPTY_FORM: CommandeInput = { fournisseur: "", objet: "", montantHt: 0, ta
 export default function CommandesPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: commandes } = useQuery({
+  const { data: commandes, isLoading } = useQuery({
     queryKey: ["commandes", showArchived],
     queryFn: () => listCommandes(showArchived),
   });
@@ -124,6 +124,8 @@ export default function CommandesPage() {
           </Card>
         </div>
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -167,7 +169,7 @@ export default function CommandesPage() {
                   </td>
                 </tr>
               ))}
-              {all.length === 0 && (
+              {!isLoading && all.length === 0 && (
                 <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucune commande pour le moment.</td></tr>
               )}
             </tbody>

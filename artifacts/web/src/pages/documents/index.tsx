@@ -25,7 +25,7 @@ function joursRestants(dateExpiration: string | null): number | null {
 export default function DocumentsPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: documents } = useQuery({
+  const { data: documents, isLoading } = useQuery({
     queryKey: ["documents", showArchived],
     queryFn: () => listDocuments(showArchived),
   });
@@ -144,6 +144,8 @@ export default function DocumentsPage() {
           className="mb-4 max-w-sm"
         />
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -176,7 +178,7 @@ export default function DocumentsPage() {
                   </tr>
                 );
               })}
-              {filtered.length === 0 && (
+              {!isLoading && filtered.length === 0 && (
                 <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucun document pour le moment.</td></tr>
               )}
             </tbody>
