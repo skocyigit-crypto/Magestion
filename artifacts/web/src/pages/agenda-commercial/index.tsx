@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,9 +44,17 @@ export default function AgendaCommercialPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+
   const all = (events ?? []).slice().sort((a, b) => new Date(a.dateHeure).getTime() - new Date(b.dateHeure).getTime());
   const aVenir = all.filter((e) => new Date(e.dateHeure) > new Date() && e.statut !== "ANNULE").length;
   const aujourdhui = all.filter((e) => new Date(e.dateHeure).toDateString() === new Date().toDateString()).length;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((e) => e.titre.toLowerCase().includes(q));
+  }, [all, search]);
 
   function openCreate() {
     setEditingId(null);
@@ -125,10 +133,17 @@ export default function AgendaCommercialPage() {
           </Card>
         </div>
 
+        <Input
+          placeholder="Rechercher (titre)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
+
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="flex flex-col gap-2">
-          {all.map((ev: AgendaEvent) => (
+          {filtered.map((ev: AgendaEvent) => (
             <div key={ev.id} className={`flex items-center justify-between rounded-lg border border-border px-4 py-3 ${ev.active ? "" : "opacity-60"}`}>
               <div>
                 <p className="font-medium">{ev.titre}</p>
@@ -151,7 +166,7 @@ export default function AgendaCommercialPage() {
               </div>
             </div>
           ))}
-          {!isLoading && all.length === 0 && <p className="text-muted-foreground">Aucun evenement planifie.</p>}
+          {!isLoading && filtered.length === 0 && <p className="text-muted-foreground">Aucun evenement planifie.</p>}
         </div>
       </div>
 

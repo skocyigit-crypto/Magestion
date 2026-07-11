@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,8 +33,18 @@ export default function SecuritePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+
   const all = incidents ?? [];
   const critiques = all.filter((i) => i.gravite === "CRITIQUE" || i.gravite === "ELEVEE").length;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter(
+      (i) => i.titre.toLowerCase().includes(q) || i.typeIncident.toLowerCase().includes(q),
+    );
+  }, [all, search]);
 
   function openCreate() {
     setEditingId(null);
@@ -105,10 +115,17 @@ export default function SecuritePage() {
           </Card>
         </div>
 
+        <Input
+          placeholder="Rechercher (titre, type d'incident)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
+
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="flex flex-col gap-2">
-          {all.map((i) => (
+          {filtered.map((i) => (
             <div key={i.id} className={`rounded-lg border border-border p-4 ${i.active ? "" : "opacity-60"}`}>
               <div className="mb-1 flex items-center justify-between">
                 <p className="font-medium">{i.titre}</p>
@@ -124,7 +141,7 @@ export default function SecuritePage() {
               </div>
             </div>
           ))}
-          {!isLoading && all.length === 0 && <p className="text-muted-foreground">Aucun incident signale.</p>}
+          {!isLoading && filtered.length === 0 && <p className="text-muted-foreground">Aucun incident signale.</p>}
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,9 +30,19 @@ export default function UtilisateursPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+
   const all = users ?? [];
   const actifs = all.filter((u) => u.active).length;
   const superAdmins = all.filter((u) => u.role === "SUPER_ADMIN").length;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter(
+      (u) => u.nom.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
+    );
+  }, [all, search]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -83,10 +93,17 @@ export default function UtilisateursPage() {
           </Card>
         </div>
 
+        <Input
+          placeholder="Rechercher (nom, email)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
+
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="flex flex-col gap-3">
-          {all.map((user) => {
+          {filtered.map((user) => {
             const isSelf = user.id === currentUser?.id;
             return (
               <Card key={user.id}>
@@ -124,7 +141,7 @@ export default function UtilisateursPage() {
               </Card>
             );
           })}
-          {!isLoading && all.length === 0 && <p className="text-muted-foreground">Aucun utilisateur pour le moment.</p>}
+          {!isLoading && filtered.length === 0 && <p className="text-muted-foreground">Aucun utilisateur pour le moment.</p>}
         </div>
       </div>
 

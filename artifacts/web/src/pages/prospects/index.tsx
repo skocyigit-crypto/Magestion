@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
@@ -37,9 +37,19 @@ export default function ProspectsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<ProspectStatut | null>(null);
+  const [search, setSearch] = useState("");
 
   const all = prospects ?? [];
-  const byStage = (stage: ProspectStatut) => all.filter((p) => p.statut === stage);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter(
+      (p) => p.nom.toLowerCase().includes(q) || (p.contact ?? "").toLowerCase().includes(q),
+    );
+  }, [all, search]);
+
+  const byStage = (stage: ProspectStatut) => filtered.filter((p) => p.statut === stage);
 
   const budgetPipeline = all
     .filter((p) => p.statut !== "PERDU" && p.statut !== "GAGNE")
@@ -91,6 +101,13 @@ export default function ProspectsPage() {
             <CardContent><p className="text-2xl font-semibold">{tauxConversion !== null ? `${tauxConversion} %` : "—"}</p></CardContent>
           </Card>
         </div>
+
+        <Input
+          placeholder="Rechercher (nom, contact)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
 
         {isLoading && <p className="mb-4 text-muted-foreground">Chargement...</p>}
 
