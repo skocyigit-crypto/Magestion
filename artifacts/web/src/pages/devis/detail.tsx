@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useLocation } from "wouter";
+import { Link, useParams, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import {
   type TauxTva,
 } from "@/lib/devis";
 import { listProjects } from "@/lib/projects";
+import { listFactures } from "@/lib/factures";
 
 export default function DevisDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,6 +28,8 @@ export default function DevisDetailPage() {
   const queryClient = useQueryClient();
   const { data: devis, isLoading } = useQuery({ queryKey: ["devis", id], queryFn: () => getDevis(id) });
   const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
+  const { data: facturesList } = useQuery({ queryKey: ["factures"], queryFn: listFactures });
+  const factureIssue = (facturesList ?? []).find((f) => f.devisId === id);
   const [converting, setConverting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sendNotice, setSendNotice] = useState<string | null>(null);
@@ -124,8 +127,18 @@ export default function DevisDetailPage() {
           </div>
         </div>
 
+        {factureIssue && (
+          <p className="mb-4 text-sm text-muted-foreground">
+            Facture generee : <Link href={`/factures/${factureIssue.id}`} className="text-primary hover:underline">{factureIssue.numero}</Link>
+          </p>
+        )}
+
         {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
-        {sendNotice && <p className="mb-4 text-sm text-muted-foreground">{sendNotice}</p>}
+        {sendNotice && (
+          <p className={`mb-4 text-sm ${sendNotice.startsWith("Email envoye") ? "text-emerald-400" : "text-orange-400"}`}>
+            {sendNotice}
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <Card>

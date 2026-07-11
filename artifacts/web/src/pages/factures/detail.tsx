@@ -101,7 +101,11 @@ export default function FactureDetailPage() {
             🔒 Facture emise — montant et objet verrouilles (regle de tracabilite financiere). Seul le statut peut encore evoluer.
           </p>
         )}
-        {sendNotice && <p className="mb-4 text-sm text-muted-foreground">{sendNotice}</p>}
+        {sendNotice && (
+          <p className={`mb-4 text-sm ${sendNotice.startsWith("Email envoye") ? "text-emerald-400" : "text-orange-400"}`}>
+            {sendNotice}
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <Card>
