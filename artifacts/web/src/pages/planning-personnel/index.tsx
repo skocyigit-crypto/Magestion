@@ -41,10 +41,11 @@ export default function PlanningPersonnelPage() {
   const debut = toDateStr(weekDays[0]);
   const fin = toDateStr(weekDays[6]);
 
-  const { data: employees, isLoading: employeesLoading } = useQuery({ queryKey: ["employees"], queryFn: () => listEmployees() });
+  const { data: employees, isLoading: employeesLoading, isError: employeesError } = useQuery({ queryKey: ["employees"], queryFn: () => listEmployees() });
   const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
-  const { data: affectations, isLoading: affectationsLoading } = useQuery({ queryKey: ["planning-personnel", debut, fin], queryFn: () => listAffectations(debut, fin) });
+  const { data: affectations, isLoading: affectationsLoading, isError: affectationsError } = useQuery({ queryKey: ["planning-personnel", debut, fin], queryFn: () => listAffectations(debut, fin) });
   const isLoading = employeesLoading || affectationsLoading;
+  const isError = employeesError || affectationsError;
 
   const [modalCell, setModalCell] = useState<{ employeeId: string; date: string } | null>(null);
   const [editingAffectation, setEditingAffectation] = useState<Affectation | null>(null);
@@ -137,6 +138,7 @@ export default function PlanningPersonnelPage() {
           </Card>
         </div>
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -184,7 +186,7 @@ export default function PlanningPersonnelPage() {
                   })}
                 </tr>
               ))}
-              {!isLoading && (employees ?? []).length === 0 && (
+              {!isLoading && !isError && (employees ?? []).length === 0 && (
                 <tr><td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">Ajoutez des employes dans Equipe pour commencer.</td></tr>
               )}
             </tbody>

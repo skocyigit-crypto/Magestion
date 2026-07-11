@@ -15,12 +15,12 @@ export default function ComptabilitePage() {
   const [exercice, setExercice] = useState<string>("");
   const exerciceNum = exercice ? Number(exercice) : undefined;
 
-  const { data: journal, isLoading: journalLoading } = useQuery({ queryKey: ["comptabilite", "journal"], queryFn: listJournal });
-  const { data: balance, isLoading: balanceLoading } = useQuery({
+  const { data: journal, isLoading: journalLoading, isError: journalError } = useQuery({ queryKey: ["comptabilite", "journal"], queryFn: listJournal });
+  const { data: balance, isLoading: balanceLoading, isError: balanceError } = useQuery({
     queryKey: ["comptabilite", "balance", exerciceNum],
     queryFn: () => listBalance(exerciceNum),
   });
-  const { data: planComptable, isLoading: planComptableLoading } = useQuery({ queryKey: ["comptabilite", "plan-comptable"], queryFn: listPlanComptable });
+  const { data: planComptable, isLoading: planComptableLoading, isError: planComptableError } = useQuery({ queryKey: ["comptabilite", "plan-comptable"], queryFn: listPlanComptable });
   const [fecError, setFecError] = useState<string | null>(null);
 
   const totalDebit = useMemo(() => (journal ?? []).reduce((s, l) => s + Number(l.debit), 0), [journal]);
@@ -98,6 +98,7 @@ export default function ComptabilitePage() {
 
         {tab === "journal" && (
           <>
+            {journalError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
             {journalLoading && <p className="text-muted-foreground">Chargement...</p>}
             <div className="overflow-x-auto rounded-lg border border-border">
               <table className="w-full text-sm">
@@ -135,6 +136,7 @@ export default function ComptabilitePage() {
 
         {tab === "balance" && (
           <>
+            {balanceError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
             {balanceLoading && <p className="text-muted-foreground">Chargement...</p>}
             <div className="overflow-x-auto rounded-lg border border-border">
               <table className="w-full text-sm">
@@ -168,6 +170,7 @@ export default function ComptabilitePage() {
 
         {tab === "plan" && (
           <>
+            {planComptableError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
             {planComptableLoading && <p className="text-muted-foreground">Chargement...</p>}
             <div className="overflow-x-auto rounded-lg border border-border">
               <table className="w-full text-sm">

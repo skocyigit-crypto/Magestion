@@ -31,6 +31,10 @@ export function listEmployees(onlyInactive = false) {
   return apiFetch<Employee[]>(`/employees${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
 
+export function getEmployee(id: string) {
+  return apiFetch<Employee>(`/employees/${id}`);
+}
+
 export function createEmployee(input: EmployeeInput) {
   return apiFetch<Employee>("/employees", { method: "POST", body: JSON.stringify(input) });
 }

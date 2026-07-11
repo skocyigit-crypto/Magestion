@@ -20,7 +20,7 @@ const EMPTY_FORM: ProjectInput = { nom: "", client: "", adresse: "", codePostal:
 
 export default function ChantiersPage() {
   const queryClient = useQueryClient();
-  const { data: projects, isLoading } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
+  const { data: projects, isLoading, isError } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
 
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -85,8 +85,9 @@ export default function ChantiersPage() {
           className="mb-4 max-w-sm"
         />
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
-        {!isLoading && filtered.length === 0 && (
+        {!isLoading && !isError && filtered.length === 0 && (
           <p className="text-muted-foreground">Aucun chantier pour le moment.</p>
         )}
 

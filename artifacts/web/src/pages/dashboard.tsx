@@ -10,12 +10,13 @@ import { listRelancesAFaire } from "@/lib/relances";
 const fmtEuro = (n: number) => `${n.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} €`;
 
 export default function DashboardPage() {
-  const { data: projects, isLoading: projectsLoading } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
-  const { data: factures, isLoading: facturesLoading } = useQuery({ queryKey: ["factures"], queryFn: listFactures });
-  const { data: depenses, isLoading: depensesLoading } = useQuery({ queryKey: ["depenses"], queryFn: () => listDepenses() });
-  const { data: devisList, isLoading: devisLoading } = useQuery({ queryKey: ["devis"], queryFn: listDevis });
-  const { data: relances, isLoading: relancesLoading } = useQuery({ queryKey: ["relances", "a-faire"], queryFn: listRelancesAFaire });
+  const { data: projects, isLoading: projectsLoading, isError: projectsError } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
+  const { data: factures, isLoading: facturesLoading, isError: facturesError } = useQuery({ queryKey: ["factures"], queryFn: listFactures });
+  const { data: depenses, isLoading: depensesLoading, isError: depensesError } = useQuery({ queryKey: ["depenses"], queryFn: () => listDepenses() });
+  const { data: devisList, isLoading: devisLoading, isError: devisError } = useQuery({ queryKey: ["devis"], queryFn: listDevis });
+  const { data: relances, isLoading: relancesLoading, isError: relancesError } = useQuery({ queryKey: ["relances", "a-faire"], queryFn: listRelancesAFaire });
   const isLoading = projectsLoading || facturesLoading || depensesLoading || devisLoading || relancesLoading;
+  const isError = projectsError || facturesError || depensesError || devisError || relancesError;
 
   const allProjects = projects ?? [];
   const allFactures = factures ?? [];
@@ -76,6 +77,7 @@ export default function DashboardPage() {
     <Layout>
       <div className="mx-auto max-w-6xl px-6 py-8">
         <h1 className="mb-6 text-2xl font-semibold">Tableau de bord</h1>
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="mb-4 text-muted-foreground">Chargement...</p>}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {kpis.map((kpi) => (

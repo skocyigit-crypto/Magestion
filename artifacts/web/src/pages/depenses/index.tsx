@@ -27,7 +27,7 @@ const EMPTY_FORM: DepenseInput = { fournisseur: "", objet: "", montantHt: 0, tau
 export default function DepensesPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: depenses, isLoading } = useQuery({
+  const { data: depenses, isLoading, isError } = useQuery({
     queryKey: ["depenses", showArchived],
     queryFn: () => listDepenses(showArchived),
   });
@@ -146,6 +146,7 @@ export default function DepensesPage() {
           className="mb-4 max-w-sm"
         />
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -196,7 +197,7 @@ export default function DepensesPage() {
                   </td>
                 </tr>
               ))}
-              {!isLoading && filtered.length === 0 && (
+              {!isLoading && !isError && filtered.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucune depense pour le moment.</td></tr>
               )}
             </tbody>

@@ -30,7 +30,7 @@ function scoreColor(score: number) {
 
 export default function ProspectsPage() {
   const queryClient = useQueryClient();
-  const { data: prospects, isLoading } = useQuery({ queryKey: ["prospects"], queryFn: listProspects });
+  const { data: prospects, isLoading, isError } = useQuery({ queryKey: ["prospects"], queryFn: listProspects });
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState<ProspectInput>(EMPTY_FORM);
@@ -109,6 +109,7 @@ export default function ProspectsPage() {
           className="mb-4 max-w-sm"
         />
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="mb-4 text-muted-foreground">Chargement...</p>}
 
         <div className="flex gap-4 overflow-x-auto pb-4">
@@ -153,7 +154,7 @@ export default function ProspectsPage() {
                     </Link>
                   </div>
                 ))}
-                {!isLoading && byStage(stage).length === 0 && (
+                {!isLoading && !isError && byStage(stage).length === 0 && (
                   <p className="text-xs text-muted-foreground">Aucun prospect</p>
                 )}
               </div>

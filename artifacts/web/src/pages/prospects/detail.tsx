@@ -21,7 +21,7 @@ import {
 export default function ProspectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const { data: prospect, isLoading } = useQuery({
+  const { data: prospect, isLoading, isError } = useQuery({
     queryKey: ["prospects", id],
     queryFn: () => getProspect(id),
   });
@@ -80,6 +80,7 @@ export default function ProspectDetailPage() {
   }
 
   if (isLoading) return <Layout><p className="p-8 text-muted-foreground">Chargement...</p></Layout>;
+  if (isError) return <Layout><p className="p-8 text-red-400">Erreur lors du chargement. Veuillez reessayer.</p></Layout>;
   if (!prospect) return <Layout><p className="p-8 text-muted-foreground">Prospect introuvable.</p></Layout>;
 
   return (

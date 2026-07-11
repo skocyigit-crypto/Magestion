@@ -22,7 +22,7 @@ const EMPTY_FORM: IncidentInput = { titre: "", typeIncident: "", gravite: "FAIBL
 export default function SecuritePage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: incidents, isLoading } = useQuery({
+  const { data: incidents, isLoading, isError } = useQuery({
     queryKey: ["securite", showArchived],
     queryFn: () => listIncidents(showArchived),
   });
@@ -122,6 +122,7 @@ export default function SecuritePage() {
           className="mb-4 max-w-sm"
         />
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="flex flex-col gap-2">
@@ -141,7 +142,7 @@ export default function SecuritePage() {
               </div>
             </div>
           ))}
-          {!isLoading && filtered.length === 0 && <p className="text-muted-foreground">Aucun incident signale.</p>}
+          {!isLoading && !isError && filtered.length === 0 && <p className="text-muted-foreground">Aucun incident signale.</p>}
         </div>
       </div>
 

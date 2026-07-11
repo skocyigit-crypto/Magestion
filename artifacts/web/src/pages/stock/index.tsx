@@ -20,7 +20,7 @@ const EMPTY_FORM: StockItemInput = { nom: "", unite: "u", seuilAlerte: 0, prixUn
 export default function StockPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: items, isLoading } = useQuery({
+  const { data: items, isLoading, isError } = useQuery({
     queryKey: ["stock", showArchived],
     queryFn: () => listStockItems(showArchived),
   });
@@ -133,6 +133,7 @@ export default function StockPage() {
           className="mb-4 max-w-sm"
         />
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -164,7 +165,7 @@ export default function StockPage() {
                   </td>
                 </tr>
               ))}
-              {!isLoading && filtered.length === 0 && (
+              {!isLoading && !isError && filtered.length === 0 && (
                 <tr><td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">Aucun article de stock pour le moment.</td></tr>
               )}
             </tbody>

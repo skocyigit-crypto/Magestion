@@ -10,7 +10,7 @@ import { fetchLogoBlobUrl, getParametres, updateParametres, uploadLogo, type Par
 const EMPTY_FORM: ParametresInput = { nom: "" };
 
 export default function ParametresPage() {
-  const { data: parametres, refetch } = useQuery({ queryKey: ["parametres"], queryFn: getParametres });
+  const { data: parametres, refetch, isError } = useQuery({ queryKey: ["parametres"], queryFn: getParametres });
 
   const [form, setForm] = useState<ParametresInput>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -81,6 +81,8 @@ export default function ParametresPage() {
         <p className="mb-6 text-sm text-muted-foreground">
           Ces informations apparaissent sur les devis/factures PDF et comme expediteur des emails. Le SIRET est utilise pour l'export FEC.
         </p>
+
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
 
         <Card className="mb-6">
           <CardHeader><CardTitle>Logo</CardTitle></CardHeader>
