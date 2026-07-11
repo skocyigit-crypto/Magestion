@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,8 +31,18 @@ export default function SousTraitantsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+
   const all = sousTraitants ?? [];
   const assuranceExpiree = all.filter((s) => isAssuranceExpiree(s.assuranceDecennaleValidite)).length;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter(
+      (s) => s.raisonSociale.toLowerCase().includes(q) || s.siret.toLowerCase().includes(q),
+    );
+  }, [all, search]);
 
   function openCreate() {
     setEditingId(null);
@@ -106,6 +116,13 @@ export default function SousTraitantsPage() {
           </Card>
         </div>
 
+        <Input
+          placeholder="Rechercher (raison sociale, SIRET)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
+
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -120,7 +137,7 @@ export default function SousTraitantsPage() {
               </tr>
             </thead>
             <tbody>
-              {all.map((s) => (
+              {filtered.map((s) => (
                 <tr key={s.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${s.active ? "" : "opacity-60"}`}>
                   <td className="px-4 py-2">{s.raisonSociale}</td>
                   <td className="px-4 py-2">{s.siret}</td>
@@ -138,7 +155,7 @@ export default function SousTraitantsPage() {
                   </td>
                 </tr>
               ))}
-              {!isLoading && all.length === 0 && (
+              {!isLoading && filtered.length === 0 && (
                 <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucun sous-traitant pour le moment.</td></tr>
               )}
             </tbody>

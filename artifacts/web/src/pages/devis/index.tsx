@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
@@ -29,6 +29,7 @@ export default function DevisPage() {
   const [form, setForm] = useState<DevisInput>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const all = devisList ?? [];
   const enCoursCount = all.filter((d) => d.statut === "ENVOYE").length;
@@ -38,6 +39,17 @@ export default function DevisPage() {
     return closes > 0 ? Math.round((acceptes / closes) * 100) : null;
   })();
   const montantTotalHt = all.reduce((sum, d) => sum + Number(d.montantHt), 0);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter(
+      (d) =>
+        d.numero.toLowerCase().includes(q) ||
+        d.client.toLowerCase().includes(q) ||
+        d.objet.toLowerCase().includes(q),
+    );
+  }, [all, search]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -82,6 +94,13 @@ export default function DevisPage() {
           </Card>
         </div>
 
+        <Input
+          placeholder="Rechercher (numero, client, objet)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -94,7 +113,7 @@ export default function DevisPage() {
               </tr>
             </thead>
             <tbody>
-              {all.map((d) => (
+              {filtered.map((d) => (
                 <tr key={d.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                   <td className="px-4 py-2">
                     <Link href={`/devis/${d.id}`} className="text-primary hover:underline">{d.numero}</Link>
@@ -105,7 +124,7 @@ export default function DevisPage() {
                   <td className="px-4 py-2">{DEVIS_STATUT_LABELS[d.statut]}</td>
                 </tr>
               ))}
-              {all.length === 0 && (
+              {filtered.length === 0 && (
                 <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucun devis pour le moment.</td></tr>
               )}
             </tbody>

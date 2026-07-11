@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,10 +39,20 @@ export default function DepensesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+
   const all = depenses ?? [];
   const totalTtc = all.reduce((sum, d) => sum + montantTtc(d.montantHt, d.tauxTva), 0);
   const aValider = all.filter((d) => d.statut === "A_VALIDER").length;
   const enLitige = all.filter((d) => d.statut === "EN_LITIGE").length;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter(
+      (d) => d.fournisseur.toLowerCase().includes(q) || d.objet.toLowerCase().includes(q),
+    );
+  }, [all, search]);
 
   function openCreate() {
     setEditingId(null);
@@ -129,6 +139,13 @@ export default function DepensesPage() {
           </Card>
         </div>
 
+        <Input
+          placeholder="Rechercher (fournisseur, objet)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
+
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -144,7 +161,7 @@ export default function DepensesPage() {
               </tr>
             </thead>
             <tbody>
-              {all.map((d) => (
+              {filtered.map((d) => (
                 <tr key={d.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${d.active ? "" : "opacity-60"}`}>
                   <td className="px-4 py-2">
                     {d.fournisseur}
@@ -179,7 +196,7 @@ export default function DepensesPage() {
                   </td>
                 </tr>
               ))}
-              {!isLoading && all.length === 0 && (
+              {!isLoading && filtered.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucune depense pour le moment.</td></tr>
               )}
             </tbody>

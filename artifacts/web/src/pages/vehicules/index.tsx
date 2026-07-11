@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,8 +38,21 @@ export default function VehiculesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+
   const all = vehicles ?? [];
   const disponibles = all.filter((v) => v.statut === "DISPONIBLE").length;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter(
+      (v) =>
+        v.immatriculation.toLowerCase().includes(q) ||
+        (v.marque ?? "").toLowerCase().includes(q) ||
+        (v.modele ?? "").toLowerCase().includes(q),
+    );
+  }, [all, search]);
 
   function openCreate() {
     setEditingId(null);
@@ -118,10 +131,17 @@ export default function VehiculesPage() {
           </Card>
         </div>
 
+        <Input
+          placeholder="Rechercher (immatriculation, marque, modele)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
+
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {all.map((v: Vehicle) => (
+          {filtered.map((v: Vehicle) => (
             <Card key={v.id} className={v.active ? undefined : "opacity-60"}>
               <CardHeader><CardTitle className="text-foreground">{v.immatriculation}</CardTitle></CardHeader>
               <CardContent className="flex flex-col gap-2 text-sm text-muted-foreground">
@@ -145,7 +165,7 @@ export default function VehiculesPage() {
               </CardContent>
             </Card>
           ))}
-          {!isLoading && all.length === 0 && <p className="text-muted-foreground">Aucun vehicule pour le moment.</p>}
+          {!isLoading && filtered.length === 0 && <p className="text-muted-foreground">Aucun vehicule pour le moment.</p>}
         </div>
       </div>
 

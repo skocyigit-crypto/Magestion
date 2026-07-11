@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,8 +36,18 @@ export default function EquipePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+
   const all = employees ?? [];
   const surChantier = all.filter((e) => e.statut === "SUR_CHANTIER").length;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter(
+      (e) => e.nom.toLowerCase().includes(q) || e.prenom.toLowerCase().includes(q),
+    );
+  }, [all, search]);
 
   function openCreate() {
     setEditingId(null);
@@ -118,10 +128,17 @@ export default function EquipePage() {
           </Card>
         </div>
 
+        <Input
+          placeholder="Rechercher (nom, prenom)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
+
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {all.map((emp: Employee) => (
+          {filtered.map((emp: Employee) => (
             <Card key={emp.id} className={emp.active ? undefined : "opacity-60"}>
               <CardHeader>
                 <div className="flex items-center gap-2">
@@ -149,7 +166,7 @@ export default function EquipePage() {
               </CardContent>
             </Card>
           ))}
-          {!isLoading && all.length === 0 && <p className="text-muted-foreground">Aucun employe pour le moment.</p>}
+          {!isLoading && filtered.length === 0 && <p className="text-muted-foreground">Aucun employe pour le moment.</p>}
         </div>
       </div>
 
