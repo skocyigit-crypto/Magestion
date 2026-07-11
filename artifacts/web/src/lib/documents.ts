@@ -1,12 +1,13 @@
 import { apiFetch, getToken } from "@/lib/api";
 
 export type DocumentType = "CONTRAT" | "ASSURANCE" | "PERMIS" | "FACTURE" | "PLAN" | "AUTRE";
+export type EntityType = "PROJECT" | "EMPLOYEE" | "VEHICLE" | "SOUS_TRAITANT" | "GENERAL";
 
 export interface DocumentItem {
   id: string;
   nom: string;
   type: DocumentType;
-  entityType: string;
+  entityType: EntityType;
   entityId: string | null;
   cheminFichier: string;
   tailleOctets: number;
@@ -22,13 +23,18 @@ export function listDocuments(onlyInactive = false) {
 
 const API_BASE = `${import.meta.env.VITE_API_URL ?? ""}/api`;
 
-export async function uploadDocument(file: File, meta: { nom?: string; type?: DocumentType; dateExpiration?: string }) {
+export async function uploadDocument(
+  file: File,
+  meta: { nom?: string; type?: DocumentType; dateExpiration?: string; entityType?: EntityType; entityId?: string },
+) {
   const token = getToken();
   const form = new FormData();
   form.append("file", file);
   if (meta.nom) form.append("nom", meta.nom);
   if (meta.type) form.append("type", meta.type);
   if (meta.dateExpiration) form.append("dateExpiration", meta.dateExpiration);
+  if (meta.entityType) form.append("entityType", meta.entityType);
+  if (meta.entityId) form.append("entityId", meta.entityId);
 
   const res = await fetch(`${API_BASE}/documents`, {
     method: "POST",
@@ -64,6 +70,8 @@ export interface DocumentUpdateInput {
   type?: DocumentType;
   dateExpiration?: string;
   active?: boolean;
+  entityType?: EntityType;
+  entityId?: string;
 }
 
 export function updateDocument(id: string, input: DocumentUpdateInput) {
@@ -77,6 +85,14 @@ export const TYPE_LABELS: Record<DocumentType, string> = {
   FACTURE: "Facture",
   PLAN: "Plan",
   AUTRE: "Autre",
+};
+
+export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
+  PROJECT: "Chantier",
+  EMPLOYEE: "Employe",
+  VEHICLE: "Vehicule",
+  SOUS_TRAITANT: "Sous-traitant",
+  GENERAL: "General",
 };
 
 export function formatTaille(octets: number): string {

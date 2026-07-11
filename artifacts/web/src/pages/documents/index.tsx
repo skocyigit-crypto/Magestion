@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
+  ENTITY_TYPE_LABELS,
   TYPE_LABELS,
   downloadDocument,
   formatTaille,
@@ -15,12 +16,24 @@ import {
   uploadDocument,
   type DocumentItem,
   type DocumentType,
+  type EntityType,
 } from "@/lib/documents";
+import { listProjects } from "@/lib/projects";
+import { listEmployees } from "@/lib/employees";
+import { listVehicles } from "@/lib/vehicles";
+import { listSousTraitants } from "@/lib/sousTraitants";
 
 function joursRestants(dateExpiration: string | null): number | null {
   if (!dateExpiration) return null;
   return Math.ceil((new Date(dateExpiration).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 }
+
+interface EntityForm {
+  entityType: EntityType;
+  entityId: string;
+}
+
+const EMPTY_ENTITY: EntityForm = { entityType: "GENERAL", entityId: "" };
 
 export default function DocumentsPage() {
   const queryClient = useQueryClient();
@@ -29,10 +42,31 @@ export default function DocumentsPage() {
     queryKey: ["documents", showArchived],
     queryFn: () => listDocuments(showArchived),
   });
+  const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
+  const { data: employees } = useQuery({ queryKey: ["employees"], queryFn: () => listEmployees() });
+  const { data: vehicles } = useQuery({ queryKey: ["vehicles"], queryFn: () => listVehicles() });
+  const { data: sousTraitants } = useQuery({ queryKey: ["sous-traitants"], queryFn: () => listSousTraitants() });
+
+  function entityOptions(entityType: EntityType): { id: string; label: string }[] {
+    switch (entityType) {
+      case "PROJECT": return (projects ?? []).map((p) => ({ id: p.id, label: p.nom }));
+      case "EMPLOYEE": return (employees ?? []).map((e) => ({ id: e.id, label: `${e.prenom} ${e.nom}` }));
+      case "VEHICLE": return (vehicles ?? []).map((v) => ({ id: v.id, label: v.immatriculation }));
+      case "SOUS_TRAITANT": return (sousTraitants ?? []).map((s) => ({ id: s.id, label: s.raisonSociale }));
+      default: return [];
+    }
+  }
+
+  function entityLabel(d: DocumentItem): string {
+    if (d.entityType === "GENERAL" || !d.entityId) return "General";
+    const opt = entityOptions(d.entityType).find((o) => o.id === d.entityId);
+    return `${ENTITY_TYPE_LABELS[d.entityType]} — ${opt?.label ?? "?"}`;
+  }
 
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [type, setType] = useState<DocumentType>("AUTRE");
   const [dateExpiration, setDateExpiration] = useState("");
+  const [entityForm, setEntityForm] = useState<EntityForm>(EMPTY_ENTITY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -43,10 +77,12 @@ export default function DocumentsPage() {
     type: "AUTRE",
     dateExpiration: "",
   });
+  const [editEntityForm, setEditEntityForm] = useState<EntityForm>(EMPTY_ENTITY);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
+  const [filterEntityType, setFilterEntityType] = useState<EntityType | "TOUS">("TOUS");
   const all = documents ?? [];
   const expirantBientot = all.filter((d) => {
     const j = joursRestants(d.dateExpiration);
@@ -54,9 +90,12 @@ export default function DocumentsPage() {
   }).length;
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter((d) => d.nom.toLowerCase().includes(q));
-  }, [all, search]);
+    return all.filter((d) => {
+      const matchesSearch = !q || d.nom.toLowerCase().includes(q);
+      const matchesEntity = filterEntityType === "TOUS" || d.entityType === filterEntityType;
+      return matchesSearch && matchesEntity;
+    });
+  }, [all, search, filterEntityType]);
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
@@ -68,11 +107,17 @@ export default function DocumentsPage() {
     setSaving(true);
     setError(null);
     try {
-      await uploadDocument(file, { type, dateExpiration: dateExpiration || undefined });
+      await uploadDocument(file, {
+        type,
+        dateExpiration: dateExpiration || undefined,
+        entityType: entityForm.entityType,
+        entityId: entityForm.entityId || undefined,
+      });
       await queryClient.invalidateQueries({ queryKey: ["documents"] });
       setIsUploadOpen(false);
       setDateExpiration("");
       setType("AUTRE");
+      setEntityForm(EMPTY_ENTITY);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur lors de l'upload");
@@ -84,6 +129,7 @@ export default function DocumentsPage() {
   function openEdit(d: DocumentItem) {
     setEditingId(d.id);
     setEditForm({ nom: d.nom, type: d.type, dateExpiration: d.dateExpiration ?? "" });
+    setEditEntityForm({ entityType: d.entityType, entityId: d.entityId ?? "" });
     setEditError(null);
   }
 
@@ -96,6 +142,8 @@ export default function DocumentsPage() {
       await updateDocument(editingId, {
         nom: editForm.nom,
         type: editForm.type,
+        entityType: editEntityForm.entityType,
+        ...(editEntityForm.entityId ? { entityId: editEntityForm.entityId } : {}),
         ...(editForm.dateExpiration ? { dateExpiration: editForm.dateExpiration } : {}),
       });
       await queryClient.invalidateQueries({ queryKey: ["documents"] });
@@ -137,12 +185,24 @@ export default function DocumentsPage() {
           </Card>
         </div>
 
-        <Input
-          placeholder="Rechercher (nom)..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="mb-4 max-w-sm"
-        />
+        <div className="mb-4 flex flex-wrap gap-3">
+          <Input
+            placeholder="Rechercher (nom)..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-sm"
+          />
+          <select
+            className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+            value={filterEntityType}
+            onChange={(e) => setFilterEntityType(e.target.value as EntityType | "TOUS")}
+          >
+            <option value="TOUS">Tous les rattachements</option>
+            {Object.entries(ENTITY_TYPE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
 
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
@@ -152,6 +212,7 @@ export default function DocumentsPage() {
               <tr className="border-b border-border text-left text-muted-foreground">
                 <th className="px-4 py-2">Nom</th>
                 <th className="px-4 py-2">Type</th>
+                <th className="px-4 py-2">Rattache a</th>
                 <th className="px-4 py-2">Taille</th>
                 <th className="px-4 py-2">Expiration</th>
                 <th className="px-4 py-2"></th>
@@ -164,6 +225,7 @@ export default function DocumentsPage() {
                   <tr key={d.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${d.active ? "" : "opacity-60"}`}>
                     <td className="px-4 py-2">{d.nom}</td>
                     <td className="px-4 py-2">{TYPE_LABELS[d.type]}</td>
+                    <td className="px-4 py-2 text-muted-foreground">{entityLabel(d)}</td>
                     <td className="px-4 py-2">{formatTaille(d.tailleOctets)}</td>
                     <td className={`px-4 py-2 ${jours !== null && jours <= 30 ? "text-orange-400" : ""}`}>{d.dateExpiration ?? "—"}</td>
                     <td className="px-4 py-2">
@@ -179,7 +241,7 @@ export default function DocumentsPage() {
                 );
               })}
               {!isLoading && filtered.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucun document pour le moment.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucun document pour le moment.</td></tr>
               )}
             </tbody>
           </table>
@@ -205,6 +267,37 @@ export default function DocumentsPage() {
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="entityType">Rattache a</Label>
+              <select
+                id="entityType"
+                className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+                value={entityForm.entityType}
+                onChange={(e) => setEntityForm({ entityType: e.target.value as EntityType, entityId: "" })}
+              >
+                {Object.entries(ENTITY_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+            {entityForm.entityType !== "GENERAL" && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="entityId">{ENTITY_TYPE_LABELS[entityForm.entityType]}</Label>
+                <select
+                  id="entityId"
+                  className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+                  value={entityForm.entityId}
+                  onChange={(e) => setEntityForm({ ...entityForm, entityId: e.target.value })}
+                >
+                  <option value="">—</option>
+                  {entityOptions(entityForm.entityType).map((o) => (
+                    <option key={o.id} value={o.id}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="dateExpiration">Date d'expiration (optionnel)</Label>
@@ -242,6 +335,37 @@ export default function DocumentsPage() {
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="editEntityType">Rattache a</Label>
+              <select
+                id="editEntityType"
+                className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+                value={editEntityForm.entityType}
+                onChange={(e) => setEditEntityForm({ entityType: e.target.value as EntityType, entityId: "" })}
+              >
+                {Object.entries(ENTITY_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+            {editEntityForm.entityType !== "GENERAL" && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="editEntityId">{ENTITY_TYPE_LABELS[editEntityForm.entityType]}</Label>
+                <select
+                  id="editEntityId"
+                  className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+                  value={editEntityForm.entityId}
+                  onChange={(e) => setEditEntityForm({ ...editEntityForm, entityId: e.target.value })}
+                >
+                  <option value="">—</option>
+                  {entityOptions(editEntityForm.entityType).map((o) => (
+                    <option key={o.id} value={o.id}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="editDateExpiration">Date d'expiration (optionnel)</Label>
