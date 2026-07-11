@@ -28,11 +28,11 @@ function formatHeure(iso: string | null): string {
 
 export default function PointagePage() {
   const queryClient = useQueryClient();
-  const { data: employees } = useQuery({ queryKey: ["employees"], queryFn: () => listEmployees() });
+  const { data: employees, isLoading: employeesLoading } = useQuery({ queryKey: ["employees"], queryFn: () => listEmployees() });
   // Le backend (routes/pointage.ts) retourne TOUTES les lignes sans filtre
   // `active` (pas de support onlyInactive) : le masquage des pointages
   // archives se fait donc cote client, voir visiblePointagesToday ci-dessous.
-  const { data: pointages } = useQuery({ queryKey: ["pointage"], queryFn: listPointage });
+  const { data: pointages, isLoading: pointagesLoading } = useQuery({ queryKey: ["pointage"], queryFn: listPointage });
 
   const [showArchived, setShowArchived] = useState(false);
 
@@ -138,7 +138,8 @@ export default function PointagePage() {
               </div>
             );
           })}
-          {(employees ?? []).length === 0 && (
+          {employeesLoading && <p className="text-muted-foreground">Chargement...</p>}
+          {!employeesLoading && (employees ?? []).length === 0 && (
             <p className="text-muted-foreground">Ajoutez des employes dans Equipe pour commencer le pointage.</p>
           )}
         </div>
@@ -150,6 +151,8 @@ export default function PointagePage() {
             Afficher les archives
           </label>
         </div>
+
+        {pointagesLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
@@ -177,7 +180,7 @@ export default function PointagePage() {
                   </td>
                 </tr>
               ))}
-              {visiblePointagesToday.length === 0 && (
+              {!pointagesLoading && visiblePointagesToday.length === 0 && (
                 <tr><td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">Aucun pointage pour aujourd'hui.</td></tr>
               )}
             </tbody>

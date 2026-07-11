@@ -22,7 +22,7 @@ const EMPTY_FORM = { code: "", libelle: "", unite: "u", coefficientK: 1.3 };
 export default function OuvragesPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: ouvrages } = useQuery({
+  const { data: ouvrages, isLoading } = useQuery({
     queryKey: ["ouvrages", showArchived],
     queryFn: () => listOuvrages(showArchived),
   });
@@ -35,7 +35,13 @@ export default function OuvragesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
   const all = ouvrages ?? [];
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((o) => o.code.toLowerCase().includes(q) || o.libelle.toLowerCase().includes(q));
+  }, [all, search]);
   const margeMoyenne = all.length
     ? all.reduce((sum, o) => {
         const ds = Number(o.debourseSecHt);
@@ -148,6 +154,15 @@ export default function OuvragesPage() {
           </Card>
         </div>
 
+        <Input
+          placeholder="Rechercher (code, libelle)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
+
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -161,7 +176,7 @@ export default function OuvragesPage() {
               </tr>
             </thead>
             <tbody>
-              {all.map((o) => (
+              {filtered.map((o) => (
                 <tr key={o.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${o.active ? "" : "opacity-60"}`}>
                   <td className="px-4 py-2">{o.code}</td>
                   <td className="px-4 py-2">{o.libelle}</td>
@@ -178,7 +193,7 @@ export default function OuvragesPage() {
                   </td>
                 </tr>
               ))}
-              {all.length === 0 && (
+              {!isLoading && filtered.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucun ouvrage pour le moment.</td></tr>
               )}
             </tbody>

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,10 +25,7 @@ function joursRestants(dateExpiration: string | null): number | null {
 export default function DocumentsPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  // NB: le backend (routes/documents.ts) filtre en dur `active = true` sur
-  // GET /documents et ne lit pas `onlyInactive` — cette case a cocher est
-  // donc sans effet tant que le backend n'est pas corrige (voir lib/documents.ts).
-  const { data: documents } = useQuery({
+  const { data: documents, isLoading } = useQuery({
     queryKey: ["documents", showArchived],
     queryFn: () => listDocuments(showArchived),
   });
@@ -49,11 +46,17 @@ export default function DocumentsPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
   const all = documents ?? [];
   const expirantBientot = all.filter((d) => {
     const j = joursRestants(d.dateExpiration);
     return j !== null && j <= 30;
   }).length;
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((d) => d.nom.toLowerCase().includes(q));
+  }, [all, search]);
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
@@ -134,6 +137,15 @@ export default function DocumentsPage() {
           </Card>
         </div>
 
+        <Input
+          placeholder="Rechercher (nom)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
+
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -146,7 +158,7 @@ export default function DocumentsPage() {
               </tr>
             </thead>
             <tbody>
-              {all.map((d) => {
+              {filtered.map((d) => {
                 const jours = joursRestants(d.dateExpiration);
                 return (
                   <tr key={d.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${d.active ? "" : "opacity-60"}`}>
@@ -166,7 +178,7 @@ export default function DocumentsPage() {
                   </tr>
                 );
               })}
-              {all.length === 0 && (
+              {!isLoading && filtered.length === 0 && (
                 <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucun document pour le moment.</td></tr>
               )}
             </tbody>

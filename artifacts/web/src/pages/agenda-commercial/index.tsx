@@ -33,7 +33,7 @@ function toDatetimeLocalValue(iso: string) {
 export default function AgendaCommercialPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: events } = useQuery({
+  const { data: events, isLoading } = useQuery({
     queryKey: ["agenda", showArchived],
     queryFn: () => listAgenda(showArchived),
   });
@@ -125,6 +125,8 @@ export default function AgendaCommercialPage() {
           </Card>
         </div>
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="flex flex-col gap-2">
           {all.map((ev: AgendaEvent) => (
             <div key={ev.id} className={`flex items-center justify-between rounded-lg border border-border px-4 py-3 ${ev.active ? "" : "opacity-60"}`}>
@@ -149,7 +151,7 @@ export default function AgendaCommercialPage() {
               </div>
             </div>
           ))}
-          {all.length === 0 && <p className="text-muted-foreground">Aucun evenement planifie.</p>}
+          {!isLoading && all.length === 0 && <p className="text-muted-foreground">Aucun evenement planifie.</p>}
         </div>
       </div>
 

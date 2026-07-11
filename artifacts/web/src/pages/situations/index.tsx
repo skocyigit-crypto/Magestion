@@ -28,7 +28,7 @@ export default function SituationsPage() {
     if (!projectId && projects && projects.length > 0) setProjectId(projects[0].id);
   }, [projects, projectId]);
 
-  const { data: situations } = useQuery({
+  const { data: situations, isLoading } = useQuery({
     queryKey: ["situations", projectId],
     queryFn: () => listSituations(projectId),
     enabled: !!projectId,
@@ -137,6 +137,8 @@ export default function SituationsPage() {
           </Card>
         </div>
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -171,7 +173,7 @@ export default function SituationsPage() {
                   </td>
                 </tr>
               ))}
-              {all.length === 0 && (
+              {!isLoading && all.length === 0 && (
                 <tr><td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">Aucune situation pour ce chantier.</td></tr>
               )}
             </tbody>

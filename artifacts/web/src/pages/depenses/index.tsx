@@ -27,7 +27,7 @@ const EMPTY_FORM: DepenseInput = { fournisseur: "", objet: "", montantHt: 0, tau
 export default function DepensesPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: depenses } = useQuery({
+  const { data: depenses, isLoading } = useQuery({
     queryKey: ["depenses", showArchived],
     queryFn: () => listDepenses(showArchived),
   });
@@ -129,6 +129,8 @@ export default function DepensesPage() {
           </Card>
         </div>
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -177,7 +179,7 @@ export default function DepensesPage() {
                   </td>
                 </tr>
               ))}
-              {all.length === 0 && (
+              {!isLoading && all.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucune depense pour le moment.</td></tr>
               )}
             </tbody>

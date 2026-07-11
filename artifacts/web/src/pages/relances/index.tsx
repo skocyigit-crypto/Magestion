@@ -7,7 +7,7 @@ import { PALIER_COLORS, PALIER_LABELS, listRelancesAFaire, logRelance } from "@/
 
 export default function RelancesPage() {
   const queryClient = useQueryClient();
-  const { data: aFaire } = useQuery({ queryKey: ["relances", "a-faire"], queryFn: listRelancesAFaire });
+  const { data: aFaire, isLoading } = useQuery({ queryKey: ["relances", "a-faire"], queryFn: listRelancesAFaire });
   const [notices, setNotices] = useState<Record<string, string>>({});
 
   const all = aFaire ?? [];
@@ -40,6 +40,8 @@ export default function RelancesPage() {
           </Card>
         </div>
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="flex flex-col gap-2">
           {all.map((r) => (
             <div key={r.devisId} className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
@@ -57,7 +59,7 @@ export default function RelancesPage() {
               </div>
             </div>
           ))}
-          {all.length === 0 && <p className="text-muted-foreground">Aucun devis en attente de relance — tout est a jour.</p>}
+          {!isLoading && all.length === 0 && <p className="text-muted-foreground">Aucun devis en attente de relance — tout est a jour.</p>}
         </div>
       </div>
     </Layout>

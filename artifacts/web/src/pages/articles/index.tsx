@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,11 +21,12 @@ const EMPTY_FORM: ArticleInput = { code: "", libelle: "", unite: "u", categorie:
 export default function ArticlesPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: articles } = useQuery({
+  const { data: articles, isLoading } = useQuery({
     queryKey: ["articles", showArchived],
     queryFn: () => listArticles(showArchived),
   });
 
+  const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ArticleInput>(EMPTY_FORM);
@@ -33,6 +34,11 @@ export default function ArticlesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const all = articles ?? [];
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((a) => a.code.toLowerCase().includes(q) || a.libelle.toLowerCase().includes(q));
+  }, [all, search]);
 
   function openCreate() {
     setEditingId(null);
@@ -99,6 +105,15 @@ export default function ArticlesPage() {
           </Card>
         </div>
 
+        <Input
+          placeholder="Rechercher (code, libelle)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
+
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -112,7 +127,7 @@ export default function ArticlesPage() {
               </tr>
             </thead>
             <tbody>
-              {all.map((a) => (
+              {filtered.map((a) => (
                 <tr key={a.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${a.active ? "" : "opacity-60"}`}>
                   <td className="px-4 py-2">{a.code}</td>
                   <td className="px-4 py-2">{a.libelle}</td>
@@ -129,7 +144,7 @@ export default function ArticlesPage() {
                   </td>
                 </tr>
               ))}
-              {all.length === 0 && (
+              {!isLoading && filtered.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucun article pour le moment.</td></tr>
               )}
             </tbody>

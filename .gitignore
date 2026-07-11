@@ -6,3 +6,4 @@ dist/
 .pglite-data/
 storage/
 *.tsbuildinfo
+.vite/

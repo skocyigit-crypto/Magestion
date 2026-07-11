@@ -23,7 +23,7 @@ const ROLE_ORDER: UserRole[] = ["SUPER_ADMIN", "COMMERCIAL", "TERRAIN", "COMPTAB
 export default function UtilisateursPage() {
   const queryClient = useQueryClient();
   const currentUser = getUser();
-  const { data: users } = useQuery({ queryKey: ["users"], queryFn: listUsers });
+  const { data: users, isLoading } = useQuery({ queryKey: ["users"], queryFn: listUsers });
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState<UserInput>(EMPTY_FORM);
@@ -83,6 +83,8 @@ export default function UtilisateursPage() {
           </Card>
         </div>
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="flex flex-col gap-3">
           {all.map((user) => {
             const isSelf = user.id === currentUser?.id;
@@ -122,7 +124,7 @@ export default function UtilisateursPage() {
               </Card>
             );
           })}
-          {all.length === 0 && <p className="text-muted-foreground">Aucun utilisateur pour le moment.</p>}
+          {!isLoading && all.length === 0 && <p className="text-muted-foreground">Aucun utilisateur pour le moment.</p>}
         </div>
       </div>
 

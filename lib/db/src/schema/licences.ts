@@ -13,6 +13,7 @@ export const licencesTable = pgTable("licences", {
   email: text("email"),
   telephone: varchar("telephone", { length: 30 }),
   tvaIntracommunautaire: varchar("tva_intracommunautaire", { length: 20 }),
+  logoChemin: text("logo_chemin"),
   plan: licencePlanEnum("plan").notNull().default("TRIAL"),
   status: licenceStatusEnum("status").notNull().default("ACTIF"),
   active: boolean("active").notNull().default(true),

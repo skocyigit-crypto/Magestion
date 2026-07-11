@@ -25,7 +25,7 @@ const STATUT_ORDER: EmployeeStatut[] = ["SUR_CHANTIER", "EN_ROUTE", "ABSENT", "I
 export default function EquipePage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: employees } = useQuery({
+  const { data: employees, isLoading } = useQuery({
     queryKey: ["employees", showArchived],
     queryFn: () => listEmployees(showArchived),
   });
@@ -118,6 +118,8 @@ export default function EquipePage() {
           </Card>
         </div>
 
+        {isLoading && <p className="text-muted-foreground">Chargement...</p>}
+
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {all.map((emp: Employee) => (
             <Card key={emp.id} className={emp.active ? undefined : "opacity-60"}>
@@ -147,7 +149,7 @@ export default function EquipePage() {
               </CardContent>
             </Card>
           ))}
-          {all.length === 0 && <p className="text-muted-foreground">Aucun employe pour le moment.</p>}
+          {!isLoading && all.length === 0 && <p className="text-muted-foreground">Aucun employe pour le moment.</p>}
         </div>
       </div>
 
