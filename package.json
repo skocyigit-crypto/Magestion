@@ -1,0 +1,20 @@
+{
+  "name": "magestion",
+  "version": "0.0.0",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@9.15.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter @magestion/api-server run dev\" \"pnpm --filter @magestion/web run dev\"",
+    "dev:api": "pnpm --filter @magestion/api-server run dev",
+    "dev:web": "pnpm --filter @magestion/web run dev",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck": "tsc --build && pnpm -r --if-present run typecheck",
+    "db:migrate": "pnpm --filter @magestion/db run migrate"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "concurrently": "^9.1.2",
+    "typescript": "^5.9.2"
+  }
+}
