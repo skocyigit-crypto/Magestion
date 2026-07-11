@@ -31,8 +31,8 @@ export interface DepenseInput {
   dateEcheance?: string;
 }
 
-export function listDepenses() {
-  return apiFetch<Depense[]>("/depenses");
+export function listDepenses(onlyInactive = false) {
+  return apiFetch<Depense[]>(`/depenses${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
 
 export function createDepense(input: DepenseInput) {
@@ -41,6 +41,14 @@ export function createDepense(input: DepenseInput) {
 
 export function changeDepenseStatut(id: string, statut: "BON_A_PAYER" | "PAYEE" | "EN_LITIGE") {
   return apiFetch<Depense>(`/depenses/${id}/statut`, { method: "POST", body: JSON.stringify({ statut }) });
+}
+
+export interface DepenseUpdateInput extends Partial<DepenseInput> {
+  active?: boolean;
+}
+
+export function updateDepense(id: string, input: DepenseUpdateInput) {
+  return apiFetch<Depense>(`/depenses/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export const CATEGORIE_LABELS: Record<DepenseCategorie, string> = {

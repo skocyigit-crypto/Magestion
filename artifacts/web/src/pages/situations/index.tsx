@@ -11,7 +11,9 @@ import {
   STATUT_LABELS,
   createSituation,
   listSituations,
+  updateSituation,
   validerSituation,
+  type Situation,
   type SituationInput,
 } from "@/lib/situations";
 
@@ -32,13 +34,16 @@ export default function SituationsPage() {
     enabled: !!projectId,
   });
 
-  const [isOpen, setIsOpen] = useState(false);
-  const [form, setForm] = useState<Omit<SituationInput, "projectId">>({
+  const EMPTY_FORM: Omit<SituationInput, "projectId"> = {
     marcheHt: 0,
     avancementPercent: 0,
     tauxTva: 20,
     tauxRetenueGarantie: 5,
-  });
+  };
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<Omit<SituationInput, "projectId">>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,16 +52,40 @@ export default function SituationsPage() {
   const totalRg = all.reduce((sum, s) => sum + s.montantRetenueGarantie, 0);
   const totalNetPaye = all.filter((s) => s.statut === "VALIDEE").reduce((sum, s) => sum + s.montantNetAPayer, 0);
 
-  async function handleCreate(e: React.FormEvent) {
+  function openCreate() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setError(null);
+    setIsOpen(true);
+  }
+
+  function openEdit(s: Situation) {
+    setEditingId(s.id);
+    setForm({
+      marcheHt: Number(s.marcheHt),
+      avancementPercent: Number(s.avancementPercent),
+      tauxTva: Number(s.tauxTva) as SituationInput["tauxTva"],
+      tauxRetenueGarantie: Number(s.tauxRetenueGarantie),
+    });
+    setError(null);
+    setIsOpen(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await createSituation({ projectId, ...form });
+      if (editingId) {
+        await updateSituation(editingId, form);
+      } else {
+        await createSituation({ projectId, ...form });
+      }
       await queryClient.invalidateQueries({ queryKey: ["situations", projectId] });
       setIsOpen(false);
+      setEditingId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la creation");
+      setError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
     } finally {
       setSaving(false);
     }
@@ -72,7 +101,7 @@ export default function SituationsPage() {
       <div className="mx-auto max-w-6xl px-6 py-8">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Situations de travaux</h1>
-          <Button onClick={() => setIsOpen(true)} disabled={!projectId}>Nouvelle situation</Button>
+          <Button onClick={openCreate} disabled={!projectId}>Nouvelle situation</Button>
         </div>
 
         <div className="mb-6 flex flex-col gap-1.5">
@@ -134,7 +163,10 @@ export default function SituationsPage() {
                   <td className="px-4 py-2">{STATUT_LABELS[s.statut]}</td>
                   <td className="px-4 py-2">
                     {s.statut === "BROUILLON" && (
-                      <Button size="sm" variant="outline" onClick={() => handleValider(s.id)}>Valider</Button>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => openEdit(s)}>Modifier</Button>
+                        <Button size="sm" variant="outline" onClick={() => handleValider(s.id)}>Valider</Button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -149,9 +181,9 @@ export default function SituationsPage() {
 
       <Dialog open={isOpen} onClose={() => setIsOpen(false)}>
         <DialogHeader>
-          <DialogTitle>Nouvelle situation (n°{all.length + 1})</DialogTitle>
+          <DialogTitle>{editingId ? "Modifier la situation" : `Nouvelle situation (n°${all.length + 1})`}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="marcheHt">Montant du marche (€ HT)</Label>
             <Input

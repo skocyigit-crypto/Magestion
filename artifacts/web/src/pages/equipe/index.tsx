@@ -11,6 +11,7 @@ import {
   STATUT_LABELS,
   createEmployee,
   listEmployees,
+  updateEmployee,
   updateEmployeeStatut,
   type Employee,
   type EmployeeInput,
@@ -23,9 +24,14 @@ const STATUT_ORDER: EmployeeStatut[] = ["SUR_CHANTIER", "EN_ROUTE", "ABSENT", "I
 
 export default function EquipePage() {
   const queryClient = useQueryClient();
-  const { data: employees } = useQuery({ queryKey: ["employees"], queryFn: listEmployees });
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: employees } = useQuery({
+    queryKey: ["employees", showArchived],
+    queryFn: () => listEmployees(showArchived),
+  });
 
   const [isOpen, setIsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<EmployeeInput>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,17 +39,41 @@ export default function EquipePage() {
   const all = employees ?? [];
   const surChantier = all.filter((e) => e.statut === "SUR_CHANTIER").length;
 
-  async function handleCreate(e: React.FormEvent) {
+  function openCreate() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setIsOpen(true);
+  }
+
+  function openEdit(emp: Employee) {
+    setEditingId(emp.id);
+    setForm({
+      nom: emp.nom,
+      prenom: emp.prenom,
+      role: emp.role,
+      telephone: emp.telephone ?? undefined,
+      email: emp.email ?? undefined,
+      tauxHoraire: Number(emp.tauxHoraire),
+    });
+    setIsOpen(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await createEmployee(form);
+      if (editingId) {
+        await updateEmployee(editingId, form);
+      } else {
+        await createEmployee(form);
+      }
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
       setIsOpen(false);
       setForm(EMPTY_FORM);
+      setEditingId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la creation");
+      setError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
     } finally {
       setSaving(false);
     }
@@ -54,12 +84,23 @@ export default function EquipePage() {
     await queryClient.invalidateQueries({ queryKey: ["employees"] });
   }
 
+  async function handleToggleActive(emp: Employee) {
+    await updateEmployee(emp.id, { active: !emp.active });
+    await queryClient.invalidateQueries({ queryKey: ["employees"] });
+  }
+
   return (
     <Layout>
       <div className="mx-auto max-w-6xl px-6 py-8">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Equipe — RH</h1>
-          <Button onClick={() => setIsOpen(true)}>Ajouter un employe</Button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+              Afficher les archives
+            </label>
+            <Button onClick={openCreate}>Ajouter un employe</Button>
+          </div>
         </div>
 
         <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
@@ -79,7 +120,7 @@ export default function EquipePage() {
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {all.map((emp: Employee) => (
-            <Card key={emp.id}>
+            <Card key={emp.id} className={emp.active ? undefined : "opacity-60"}>
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: emp.couleur }} />
@@ -97,6 +138,12 @@ export default function EquipePage() {
                     <option key={s} value={s}>{STATUT_LABELS[s]}</option>
                   ))}
                 </select>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => openEdit(emp)}>Modifier</Button>
+                  <Button variant="outline" size="sm" onClick={() => handleToggleActive(emp)}>
+                    {emp.active ? "Archiver" : "Reactiver"}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -106,9 +153,9 @@ export default function EquipePage() {
 
       <Dialog open={isOpen} onClose={() => setIsOpen(false)}>
         <DialogHeader>
-          <DialogTitle>Ajouter un employe</DialogTitle>
+          <DialogTitle>{editingId ? "Modifier l'employe" : "Ajouter un employe"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="prenom">Prenom</Label>
@@ -148,10 +195,14 @@ export default function EquipePage() {
               />
             </div>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" type="email" value={form.email ?? ""} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </div>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Annuler</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Creation..." : "Creer"}</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Enregistrement..." : editingId ? "Enregistrer" : "Creer"}</Button>
           </div>
         </form>
       </Dialog>

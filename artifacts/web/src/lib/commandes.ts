@@ -25,8 +25,8 @@ export interface CommandeInput {
   dateLivraisonPrevue?: string;
 }
 
-export function listCommandes() {
-  return apiFetch<Commande[]>("/commandes");
+export function listCommandes(onlyInactive = false) {
+  return apiFetch<Commande[]>(`/commandes${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
 
 export function createCommande(input: CommandeInput) {
@@ -35,6 +35,14 @@ export function createCommande(input: CommandeInput) {
 
 export function changeCommandeStatut(id: string, statut: "ENVOYEE" | "CONFIRMEE" | "LIVREE") {
   return apiFetch<Commande>(`/commandes/${id}/statut`, { method: "POST", body: JSON.stringify({ statut }) });
+}
+
+export interface CommandeUpdateInput extends Partial<CommandeInput> {
+  active?: boolean;
+}
+
+export function updateCommande(id: string, input: CommandeUpdateInput) {
+  return apiFetch<Commande>(`/commandes/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export const STATUT_LABELS: Record<CommandeStatut, string> = {

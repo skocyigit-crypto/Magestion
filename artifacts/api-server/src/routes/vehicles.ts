@@ -3,8 +3,10 @@ import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db, vehiclesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 
 export const vehiclesRouter = Router();
+vehiclesRouter.use(requireModuleAccess("vehicles"));
 
 const TYPE_ENUM = z.enum(["CAMION", "CAMIONNETTE", "FOURGON", "VOITURE", "ENGIN_CHANTIER", "AUTRE"]);
 const CARBURANT_ENUM = z.enum(["DIESEL", "ESSENCE", "ELECTRIQUE", "GPL", "HYBRIDE"]);

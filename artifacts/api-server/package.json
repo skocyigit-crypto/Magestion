@@ -21,6 +21,8 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.0",
+    "nodemailer": "^9.0.3",
+    "pdfkit": "^0.19.1",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -30,6 +32,8 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.2",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pdfkit": "^0.17.6",
     "tsx": "catalog:",
     "typescript": "^5.9.2"
   }

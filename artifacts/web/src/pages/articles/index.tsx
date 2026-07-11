@@ -6,35 +6,76 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CATEGORIE_LABELS, createArticle, listArticles, type ArticleCategorie, type ArticleInput } from "@/lib/articles";
+import {
+  CATEGORIE_LABELS,
+  createArticle,
+  listArticles,
+  updateArticle,
+  type Article,
+  type ArticleCategorie,
+  type ArticleInput,
+} from "@/lib/articles";
 
 const EMPTY_FORM: ArticleInput = { code: "", libelle: "", unite: "u", categorie: "DIVERS", prixUnitaireHt: 0 };
 
 export default function ArticlesPage() {
   const queryClient = useQueryClient();
-  const { data: articles } = useQuery({ queryKey: ["articles"], queryFn: listArticles });
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: articles } = useQuery({
+    queryKey: ["articles", showArchived],
+    queryFn: () => listArticles(showArchived),
+  });
 
   const [isOpen, setIsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ArticleInput>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const all = articles ?? [];
 
-  async function handleCreate(e: React.FormEvent) {
+  function openCreate() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setIsOpen(true);
+  }
+
+  function openEdit(article: Article) {
+    setEditingId(article.id);
+    setForm({
+      code: article.code,
+      libelle: article.libelle,
+      unite: article.unite,
+      categorie: article.categorie,
+      prixUnitaireHt: Number(article.prixUnitaireHt),
+    });
+    setIsOpen(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await createArticle(form);
+      if (editingId) {
+        await updateArticle(editingId, form);
+      } else {
+        await createArticle(form);
+      }
       await queryClient.invalidateQueries({ queryKey: ["articles"] });
       setIsOpen(false);
       setForm(EMPTY_FORM);
+      setEditingId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la creation");
+      setError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleToggleActive(article: Article) {
+    await updateArticle(article.id, { active: !article.active });
+    await queryClient.invalidateQueries({ queryKey: ["articles"] });
   }
 
   return (
@@ -42,7 +83,13 @@ export default function ArticlesPage() {
       <div className="mx-auto max-w-5xl px-6 py-8">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Articles — Bibliotheque</h1>
-          <Button onClick={() => setIsOpen(true)}>Nouvel article</Button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+              Afficher les archives
+            </label>
+            <Button onClick={openCreate}>Nouvel article</Button>
+          </div>
         </div>
 
         <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
@@ -61,20 +108,29 @@ export default function ArticlesPage() {
                 <th className="px-4 py-2">Categorie</th>
                 <th className="px-4 py-2">Unite</th>
                 <th className="px-4 py-2">Prix unitaire HT</th>
+                <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {all.map((a) => (
-                <tr key={a.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                <tr key={a.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${a.active ? "" : "opacity-60"}`}>
                   <td className="px-4 py-2">{a.code}</td>
                   <td className="px-4 py-2">{a.libelle}</td>
                   <td className="px-4 py-2">{CATEGORIE_LABELS[a.categorie]}</td>
                   <td className="px-4 py-2">{a.unite}</td>
                   <td className="px-4 py-2">{Number(a.prixUnitaireHt).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €</td>
+                  <td className="px-4 py-2">
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEdit(a)}>Modifier</Button>
+                      <Button variant="outline" size="sm" onClick={() => handleToggleActive(a)}>
+                        {a.active ? "Archiver" : "Reactiver"}
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {all.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucun article pour le moment.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucun article pour le moment.</td></tr>
               )}
             </tbody>
           </table>
@@ -83,9 +139,9 @@ export default function ArticlesPage() {
 
       <Dialog open={isOpen} onClose={() => setIsOpen(false)}>
         <DialogHeader>
-          <DialogTitle>Nouvel article</DialogTitle>
+          <DialogTitle>{editingId ? "Modifier l'article" : "Nouvel article"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="code">Code</Label>
@@ -129,7 +185,7 @@ export default function ArticlesPage() {
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Annuler</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Creation..." : "Creer"}</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Enregistrement..." : editingId ? "Enregistrer" : "Creer"}</Button>
           </div>
         </form>
       </Dialog>

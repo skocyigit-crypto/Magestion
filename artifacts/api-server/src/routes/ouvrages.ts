@@ -3,8 +3,10 @@ import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, articlesTable, ouvrageArticlesTable, ouvragesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 
 export const ouvragesRouter = Router();
+ouvragesRouter.use(requireModuleAccess("ouvrages"));
 
 const compositionLineSchema = z.object({ articleId: z.string().uuid(), quantite: z.number().positive() });
 
@@ -93,6 +95,81 @@ ouvragesRouter.post("/", async (req, res) => {
   );
 
   res.status(201).json(created);
+});
+
+const ouvrageUpdateSchema = ouvrageInputSchema.partial().extend({ active: z.boolean().optional() });
+
+// Pas de DELETE : archivage uniquement via PATCH { active: false } (regle produit).
+// Si "composition" est fournie, le debourse sec et le prix de vente sont
+// re-derives server-side (jamais acceptes du client), memes garanties qu'a la creation.
+ouvragesRouter.patch("/:id", async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  const parsed = ouvrageUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Requete invalide", details: parsed.error.flatten() });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(ouvragesTable)
+    .where(and(eq(ouvragesTable.id, req.params.id), eq(ouvragesTable.licenceId, licenceId)))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Ouvrage introuvable" });
+    return;
+  }
+
+  const { composition, coefficientK, code, libelle, unite, tauxTva, active } = parsed.data;
+
+  let debourseSecHt: number | undefined;
+  let prixVenteHt: number | undefined;
+  const effectiveCoefficientK = coefficientK ?? Number(existing.coefficientK);
+
+  if (composition) {
+    try {
+      debourseSecHt = await computeDebourseSec(licenceId, composition);
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : "Composition invalide" });
+      return;
+    }
+    prixVenteHt = debourseSecHt * effectiveCoefficientK;
+  } else if (coefficientK !== undefined) {
+    debourseSecHt = Number(existing.debourseSecHt);
+    prixVenteHt = debourseSecHt * effectiveCoefficientK;
+  }
+
+  const [updated] = await db
+    .update(ouvragesTable)
+    .set({
+      ...(code !== undefined ? { code } : {}),
+      ...(libelle !== undefined ? { libelle } : {}),
+      ...(unite !== undefined ? { unite } : {}),
+      ...(tauxTva !== undefined ? { tauxTva: tauxTva.toString() } : {}),
+      ...(active !== undefined ? { active } : {}),
+      ...(coefficientK !== undefined ? { coefficientK: coefficientK.toString() } : {}),
+      ...(debourseSecHt !== undefined ? { debourseSecHt: debourseSecHt.toString() } : {}),
+      ...(prixVenteHt !== undefined ? { prixVenteHt: prixVenteHt.toString() } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(ouvragesTable.id, req.params.id), eq(ouvragesTable.licenceId, licenceId)))
+    .returning();
+
+  if (composition) {
+    await db.delete(ouvrageArticlesTable).where(eq(ouvrageArticlesTable.ouvrageId, req.params.id));
+    await db.insert(ouvrageArticlesTable).values(
+      composition.map((line, i) => ({
+        ouvrageId: req.params.id,
+        articleId: line.articleId,
+        quantite: line.quantite.toString(),
+        ordre: i,
+      })),
+    );
+  }
+
+  res.json(updated);
 });
 
 ouvragesRouter.get("/:id/composition", async (req, res) => {

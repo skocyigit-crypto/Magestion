@@ -25,12 +25,22 @@ export interface BalanceLigne {
   sens: "DEBITEUR" | "CREDITEUR";
 }
 
+export interface PlanComptableLigne {
+  compteNum: string;
+  libelle: string;
+  active: boolean;
+}
+
 export function listJournal() {
   return apiFetch<JournalEntry[]>("/comptabilite/journal");
 }
 
-export function listBalance() {
-  return apiFetch<BalanceLigne[]>("/comptabilite/balance");
+export function listBalance(exercice?: number) {
+  return apiFetch<BalanceLigne[]>(`/comptabilite/balance${exercice ? `?exercice=${exercice}` : ""}`);
+}
+
+export function listPlanComptable() {
+  return apiFetch<PlanComptableLigne[]>("/comptabilite/plan-comptable");
 }
 
 const API_BASE = `${import.meta.env.VITE_API_URL ?? ""}/api`;

@@ -27,6 +27,8 @@ import { vehiclesRouter } from "./routes/vehicles.js";
 import { agendaRouter } from "./routes/agenda.js";
 import { relancesRouter } from "./routes/relances.js";
 import { aiImportRouter } from "./routes/aiImport.js";
+import { usersRouter } from "./routes/users.js";
+import { parametresRouter } from "./routes/parametres.js";
 import { closeDb } from "@magestion/db";
 
 const app = express();
@@ -67,6 +69,8 @@ app.use("/api/vehicles", vehiclesRouter);
 app.use("/api/agenda", agendaRouter);
 app.use("/api/relances", relancesRouter);
 app.use("/api/ai-import", aiLimiter, aiImportRouter);
+app.use("/api/users", usersRouter);
+app.use("/api/parametres", parametresRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Route introuvable" });

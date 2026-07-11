@@ -32,6 +32,10 @@ export function retirerAffectation(id: string) {
   return apiFetch<Affectation>(`/planning-personnel/${id}`, { method: "PATCH", body: JSON.stringify({ active: false }) });
 }
 
+export function updateAffectation(id: string, input: Partial<AffectationInput>) {
+  return apiFetch<Affectation>(`/planning-personnel/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
 export const TYPE_LABELS: Record<AffectationType, string> = {
   CHANTIER: "Chantier",
   CONGE: "Conge",

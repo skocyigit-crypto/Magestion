@@ -24,12 +24,20 @@ export interface SousTraitantInput {
   urssafValidite?: string;
 }
 
-export function listSousTraitants() {
-  return apiFetch<SousTraitant[]>("/sous-traitants");
+export interface SousTraitantUpdateInput extends Partial<SousTraitantInput> {
+  active?: boolean;
+}
+
+export function listSousTraitants(onlyInactive = false) {
+  return apiFetch<SousTraitant[]>(`/sous-traitants${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
 
 export function createSousTraitant(input: SousTraitantInput) {
   return apiFetch<SousTraitant>("/sous-traitants", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function updateSousTraitant(id: string, input: SousTraitantUpdateInput) {
+  return apiFetch<SousTraitant>(`/sous-traitants/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export function isAssuranceExpiree(dateStr: string | null): boolean {

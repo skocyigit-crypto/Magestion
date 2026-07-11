@@ -16,12 +16,14 @@ import {
   type DevisInput,
   type TauxTva,
 } from "@/lib/devis";
+import { listProjects } from "@/lib/projects";
 
 const EMPTY_FORM: DevisInput = { client: "", objet: "", montantHt: 0, tauxTva: 20 };
 
 export default function DevisPage() {
   const queryClient = useQueryClient();
   const { data: devisList } = useQuery({ queryKey: ["devis"], queryFn: listDevis });
+  const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState<DevisInput>(EMPTY_FORM);
@@ -123,6 +125,29 @@ export default function DevisPage() {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="objet">Objet</Label>
             <Input id="objet" required value={form.objet} onChange={(e) => setForm({ ...form, objet: e.target.value })} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="clientEmail">Email client (optionnel — requis pour l'envoi par email)</Label>
+            <Input
+              id="clientEmail"
+              type="email"
+              value={form.clientEmail ?? ""}
+              onChange={(e) => setForm({ ...form, clientEmail: e.target.value })}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="projectId">Chantier (optionnel)</Label>
+            <select
+              id="projectId"
+              className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+              value={form.projectId ?? ""}
+              onChange={(e) => setForm({ ...form, projectId: e.target.value || undefined })}
+            >
+              <option value="">—</option>
+              {(projects ?? []).map((p) => (
+                <option key={p.id} value={p.id}>{p.nom}</option>
+              ))}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">

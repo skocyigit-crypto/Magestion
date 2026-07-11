@@ -21,12 +21,20 @@ export interface IncidentInput {
   projectId?: string;
 }
 
-export function listIncidents() {
-  return apiFetch<Incident[]>("/securite");
+export function listIncidents(onlyInactive = false) {
+  return apiFetch<Incident[]>(`/securite${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
 
 export function createIncident(input: IncidentInput) {
   return apiFetch<Incident>("/securite", { method: "POST", body: JSON.stringify(input) });
+}
+
+export interface IncidentUpdateInput extends Partial<IncidentInput> {
+  active?: boolean;
+}
+
+export function updateIncident(id: string, input: IncidentUpdateInput) {
+  return apiFetch<Incident>(`/securite/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export const GRAVITE_LABELS: Record<Gravite, string> = {

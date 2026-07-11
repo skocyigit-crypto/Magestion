@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { clearToken } from "@/lib/api";
+import { clearToken, clearUser, fetchCurrentUser, getUser, setUser, type CurrentUser } from "@/lib/api";
 
 interface NavLink {
   label: string;
@@ -81,9 +81,38 @@ function NavDropdown({ label, items, active }: { label: string; items: { href: s
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location, navigate] = useLocation();
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(() => getUser());
+
+  // Sessions ouvertes avant l'ajout du cache localStorage "magestion_user"
+  // n'ont pas cette info : on la recupere une fois via /auth/me et on la
+  // met en cache, sans forcer une reconnexion.
+  useEffect(() => {
+    if (currentUser) return;
+    fetchCurrentUser()
+      .then((user) => {
+        setUser(user);
+        setCurrentUser(user);
+      })
+      .catch(() => {});
+  }, [currentUser]);
+
+  const navGroups: (NavLink | NavGroup)[] =
+    currentUser?.role === "SUPER_ADMIN"
+      ? [
+          ...NAV_GROUPS,
+          {
+            label: "Administration",
+            items: [
+              { href: "/utilisateurs", label: "Utilisateurs" },
+              { href: "/parametres", label: "Parametres" },
+            ],
+          },
+        ]
+      : NAV_GROUPS;
 
   function handleLogout() {
     clearToken();
+    clearUser();
     navigate("/login");
   }
 
@@ -94,7 +123,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-6">
             <span className="font-semibold text-primary">Magestion</span>
             <nav className="flex gap-5">
-              {NAV_GROUPS.map((group) =>
+              {navGroups.map((group) =>
                 "href" in group ? (
                   <Link
                     key={group.href}

@@ -25,10 +25,17 @@ export interface VehicleInput {
   type?: VehicleType;
   carburant?: VehicleCarburant;
   kilometrage?: number;
+  dateAssuranceValidite?: string;
+  dateControleTechniqueValidite?: string;
 }
 
-export function listVehicles() {
-  return apiFetch<Vehicle[]>("/vehicles");
+export interface VehicleUpdateInput extends Partial<VehicleInput> {
+  statut?: VehicleStatut;
+  active?: boolean;
+}
+
+export function listVehicles(onlyInactive = false) {
+  return apiFetch<Vehicle[]>(`/vehicles${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
 
 export function createVehicle(input: VehicleInput) {
@@ -38,6 +45,18 @@ export function createVehicle(input: VehicleInput) {
 export function updateVehicleStatut(id: string, statut: VehicleStatut) {
   return apiFetch<Vehicle>(`/vehicles/${id}`, { method: "PATCH", body: JSON.stringify({ statut }) });
 }
+
+export function updateVehicle(id: string, input: VehicleUpdateInput) {
+  return apiFetch<Vehicle>(`/vehicles/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export const CARBURANT_LABELS: Record<VehicleCarburant, string> = {
+  DIESEL: "Diesel",
+  ESSENCE: "Essence",
+  ELECTRIQUE: "Electrique",
+  GPL: "GPL",
+  HYBRIDE: "Hybride",
+};
 
 export const TYPE_LABELS: Record<VehicleType, string> = {
   CAMION: "Camion",

@@ -4,6 +4,7 @@ import { Redirect, Route, Switch } from "wouter";
 // Chaque page en lazy import des le depart (leçon BTP-ULTRA-OS : 185+ pages
 // chargees en eager causaient un bundle initial monolithique).
 const LoginPage = lazy(() => import("@/pages/login"));
+const SignupPage = lazy(() => import("@/pages/signup/index"));
 const DashboardPage = lazy(() => import("@/pages/dashboard"));
 const ChantiersPage = lazy(() => import("@/pages/chantiers/index"));
 const ChantierDetailPage = lazy(() => import("@/pages/chantiers/detail"));
@@ -30,6 +31,8 @@ const VehiculesPage = lazy(() => import("@/pages/vehicules/index"));
 const AgendaCommercialPage = lazy(() => import("@/pages/agenda-commercial/index"));
 const RelancesPage = lazy(() => import("@/pages/relances/index"));
 const ImportIaPage = lazy(() => import("@/pages/import-ia/index"));
+const UtilisateursPage = lazy(() => import("@/pages/utilisateurs/index"));
+const ParametresPage = lazy(() => import("@/pages/parametres/index"));
 
 export default function App() {
   return (
@@ -37,6 +40,7 @@ export default function App() {
       <Switch>
         <Route path="/" component={() => <Redirect to="/login" />} />
         <Route path="/login" component={LoginPage} />
+        <Route path="/signup" component={SignupPage} />
         <Route path="/dashboard" component={DashboardPage} />
         <Route path="/chantiers" component={ChantiersPage} />
         <Route path="/chantiers/:id" component={ChantierDetailPage} />
@@ -63,6 +67,8 @@ export default function App() {
         <Route path="/agenda-commercial" component={AgendaCommercialPage} />
         <Route path="/relances" component={RelancesPage} />
         <Route path="/import-ia" component={ImportIaPage} />
+        <Route path="/utilisateurs" component={UtilisateursPage} />
+        <Route path="/parametres" component={ParametresPage} />
         <Route>404 — Page introuvable</Route>
       </Switch>
     </Suspense>

@@ -3,8 +3,10 @@ import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db, agendaEventsTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 
 export const agendaRouter = Router();
+agendaRouter.use(requireModuleAccess("agenda"));
 
 const TYPE_ENUM = z.enum(["RDV", "VISITE_CHANTIER", "APPEL", "REUNION", "SIGNATURE", "LIVRAISON", "RELANCE", "AUTRE"]);
 const STATUT_ENUM = z.enum(["PLANIFIE", "CONFIRME", "EN_COURS", "EFFECTUE", "ANNULE", "REPORTE"]);
@@ -25,7 +27,11 @@ agendaRouter.get("/", async (req, res) => {
   const licenceId = requireLicenceId(req.user!, res);
   if (!licenceId) return;
 
-  const rows = await db.select().from(agendaEventsTable).where(and(eq(agendaEventsTable.licenceId, licenceId), eq(agendaEventsTable.active, true)));
+  const onlyInactive = req.query.onlyInactive === "true";
+  const rows = await db
+    .select()
+    .from(agendaEventsTable)
+    .where(and(eq(agendaEventsTable.licenceId, licenceId), eq(agendaEventsTable.active, !onlyInactive)));
   res.json(rows);
 });
 
@@ -78,25 +84,55 @@ agendaRouter.post("/", async (req, res) => {
   res.status(201).json(created);
 });
 
+const eventUpdateSchema = eventInputSchema.partial().extend({ statut: STATUT_ENUM.optional(), active: z.boolean().optional() });
+
 agendaRouter.patch("/:id", async (req, res) => {
   const licenceId = requireLicenceId(req.user!, res);
   if (!licenceId) return;
 
-  const parsed = z.object({ statut: STATUT_ENUM.optional(), active: z.boolean().optional() }).safeParse(req.body);
+  const parsed = eventUpdateSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Requete invalide" });
+    res.status(400).json({ error: "Requete invalide", details: parsed.error.flatten() });
     return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(agendaEventsTable)
+    .where(and(eq(agendaEventsTable.id, req.params.id), eq(agendaEventsTable.licenceId, licenceId)))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Evenement introuvable" });
+    return;
+  }
+
+  const { dateHeure: dateHeureInput, dureeMinutes, ...rest } = parsed.data;
+  const nextDateHeure = dateHeureInput !== undefined ? new Date(dateHeureInput) : existing.dateHeure;
+  const nextDureeMinutes = dureeMinutes ?? existing.dureeMinutes;
+
+  if (dateHeureInput !== undefined || dureeMinutes !== undefined) {
+    const others = await db
+      .select()
+      .from(agendaEventsTable)
+      .where(and(eq(agendaEventsTable.licenceId, licenceId), eq(agendaEventsTable.active, true)));
+    const conflit = others.find(
+      (e) => e.id !== existing.id && overlaps(nextDateHeure, nextDureeMinutes, new Date(e.dateHeure), e.dureeMinutes),
+    );
+    if (conflit) {
+      res.status(409).json({ error: `Conflit avec un autre rendez-vous : "${conflit.titre}"` });
+      return;
+    }
   }
 
   const [updated] = await db
     .update(agendaEventsTable)
-    .set(parsed.data)
+    .set({
+      ...rest,
+      ...(dateHeureInput !== undefined ? { dateHeure: nextDateHeure } : {}),
+      ...(dureeMinutes !== undefined ? { dureeMinutes } : {}),
+    })
     .where(and(eq(agendaEventsTable.id, req.params.id), eq(agendaEventsTable.licenceId, licenceId)))
     .returning();
 
-  if (!updated) {
-    res.status(404).json({ error: "Evenement introuvable" });
-    return;
-  }
   res.json(updated);
 });

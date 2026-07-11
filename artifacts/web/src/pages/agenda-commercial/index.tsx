@@ -11,6 +11,7 @@ import {
   TYPE_LABELS,
   createAgendaEvent,
   listAgenda,
+  updateAgendaEvent,
   updateAgendaStatut,
   type AgendaEvent,
   type AgendaStatut,
@@ -23,11 +24,22 @@ function fmtDateHeure(iso: string) {
   return new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 }
 
+function toDatetimeLocalValue(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function AgendaCommercialPage() {
   const queryClient = useQueryClient();
-  const { data: events } = useQuery({ queryKey: ["agenda"], queryFn: listAgenda });
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: events } = useQuery({
+    queryKey: ["agenda", showArchived],
+    queryFn: () => listAgenda(showArchived),
+  });
 
   const [isOpen, setIsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,17 +48,39 @@ export default function AgendaCommercialPage() {
   const aVenir = all.filter((e) => new Date(e.dateHeure) > new Date() && e.statut !== "ANNULE").length;
   const aujourdhui = all.filter((e) => new Date(e.dateHeure).toDateString() === new Date().toDateString()).length;
 
-  async function handleCreate(e: React.FormEvent) {
+  function openCreate() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setIsOpen(true);
+  }
+
+  function openEdit(ev: AgendaEvent) {
+    setEditingId(ev.id);
+    setForm({
+      titre: ev.titre,
+      type: ev.type,
+      dateHeure: toDatetimeLocalValue(ev.dateHeure),
+      dureeMinutes: ev.dureeMinutes,
+    });
+    setIsOpen(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await createAgendaEvent(form);
+      if (editingId) {
+        await updateAgendaEvent(editingId, form);
+      } else {
+        await createAgendaEvent(form);
+      }
       await queryClient.invalidateQueries({ queryKey: ["agenda"] });
       setIsOpen(false);
       setForm(EMPTY_FORM);
+      setEditingId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la creation");
+      setError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
     } finally {
       setSaving(false);
     }
@@ -57,12 +91,23 @@ export default function AgendaCommercialPage() {
     await queryClient.invalidateQueries({ queryKey: ["agenda"] });
   }
 
+  async function handleToggleActive(ev: AgendaEvent) {
+    await updateAgendaEvent(ev.id, { active: !ev.active });
+    await queryClient.invalidateQueries({ queryKey: ["agenda"] });
+  }
+
   return (
     <Layout>
       <div className="mx-auto max-w-4xl px-6 py-8">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Agenda commercial</h1>
-          <Button onClick={() => setIsOpen(true)}>Nouveau rendez-vous</Button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+              Afficher les archives
+            </label>
+            <Button onClick={openCreate}>Nouveau rendez-vous</Button>
+          </div>
         </div>
 
         <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
@@ -82,20 +127,26 @@ export default function AgendaCommercialPage() {
 
         <div className="flex flex-col gap-2">
           {all.map((ev: AgendaEvent) => (
-            <div key={ev.id} className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+            <div key={ev.id} className={`flex items-center justify-between rounded-lg border border-border px-4 py-3 ${ev.active ? "" : "opacity-60"}`}>
               <div>
                 <p className="font-medium">{ev.titre}</p>
                 <p className="text-sm text-muted-foreground">{TYPE_LABELS[ev.type]} — {fmtDateHeure(ev.dateHeure)} ({ev.dureeMinutes} min)</p>
               </div>
-              <select
-                className="h-8 rounded-md border border-border bg-transparent px-2 text-xs"
-                value={ev.statut}
-                onChange={(e) => handleStatutChange(ev.id, e.target.value as AgendaStatut)}
-              >
-                {Object.entries(STATUT_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2">
+                <select
+                  className="h-8 rounded-md border border-border bg-transparent px-2 text-xs"
+                  value={ev.statut}
+                  onChange={(e) => handleStatutChange(ev.id, e.target.value as AgendaStatut)}
+                >
+                  {Object.entries(STATUT_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <Button variant="outline" size="sm" onClick={() => openEdit(ev)}>Modifier</Button>
+                <Button variant="outline" size="sm" onClick={() => handleToggleActive(ev)}>
+                  {ev.active ? "Archiver" : "Reactiver"}
+                </Button>
+              </div>
             </div>
           ))}
           {all.length === 0 && <p className="text-muted-foreground">Aucun evenement planifie.</p>}
@@ -103,8 +154,8 @@ export default function AgendaCommercialPage() {
       </div>
 
       <Dialog open={isOpen} onClose={() => setIsOpen(false)}>
-        <DialogHeader><DialogTitle>Nouveau rendez-vous</DialogTitle></DialogHeader>
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
+        <DialogHeader><DialogTitle>{editingId ? "Modifier le rendez-vous" : "Nouveau rendez-vous"}</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="titre">Titre</Label>
             <Input id="titre" required value={form.titre} onChange={(e) => setForm({ ...form, titre: e.target.value })} />
@@ -141,7 +192,7 @@ export default function AgendaCommercialPage() {
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Annuler</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Creation..." : "Creer"}</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Enregistrement..." : editingId ? "Enregistrer" : "Creer"}</Button>
           </div>
         </form>
       </Dialog>

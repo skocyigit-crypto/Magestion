@@ -36,12 +36,20 @@ export interface CompositionDetail {
   prixUnitaireHt: string;
 }
 
-export function listOuvrages() {
-  return apiFetch<Ouvrage[]>("/ouvrages");
+export function listOuvrages(onlyInactive = false) {
+  return apiFetch<Ouvrage[]>(`/ouvrages${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
 
 export function createOuvrage(input: OuvrageInput) {
   return apiFetch<Ouvrage>("/ouvrages", { method: "POST", body: JSON.stringify(input) });
+}
+
+export interface OuvrageUpdateInput extends Partial<OuvrageInput> {
+  active?: boolean;
+}
+
+export function updateOuvrage(id: string, input: OuvrageUpdateInput) {
+  return apiFetch<Ouvrage>(`/ouvrages/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export function getComposition(ouvrageId: string) {

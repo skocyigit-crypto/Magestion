@@ -2,8 +2,10 @@ import { Router } from "express";
 import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import { db, journalEntriesTable, licencesTable, planComptableTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 
 export const comptabiliteRouter = Router();
+comptabiliteRouter.use(requireModuleAccess("comptabilite"));
 
 comptabiliteRouter.get("/plan-comptable", async (_req, res) => {
   const rows = await db.select().from(planComptableTable).where(eq(planComptableTable.active, true));
@@ -25,9 +27,17 @@ comptabiliteRouter.get("/journal", async (req, res) => {
 });
 
 // Balance de verification : somme debit/credit par compte, solde et sens.
+// exercice=YYYY optionnel (filtre par annee d'ecriture), memes conventions que /fec.
 comptabiliteRouter.get("/balance", async (req, res) => {
   const licenceId = requireLicenceId(req.user!, res);
   if (!licenceId) return;
+
+  const exercice = req.query.exercice ? Number(req.query.exercice) : undefined;
+  const conditions = [eq(journalEntriesTable.licenceId, licenceId)];
+  if (exercice) {
+    conditions.push(gte(journalEntriesTable.ecritureDate, `${exercice}-01-01`));
+    conditions.push(lte(journalEntriesTable.ecritureDate, `${exercice}-12-31`));
+  }
 
   const rows = await db
     .select({
@@ -37,7 +47,7 @@ comptabiliteRouter.get("/balance", async (req, res) => {
       totalCredit: sql<string>`SUM(${journalEntriesTable.credit})`,
     })
     .from(journalEntriesTable)
-    .where(eq(journalEntriesTable.licenceId, licenceId))
+    .where(and(...conditions))
     .groupBy(journalEntriesTable.compteNum, journalEntriesTable.compteLib)
     .orderBy(asc(journalEntriesTable.compteNum));
 

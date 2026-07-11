@@ -13,6 +13,7 @@ export const devisTable = pgTable("devis", {
   projectId: uuid("project_id").references(() => projectsTable.id),
   numero: text("numero").notNull(),
   client: text("client").notNull(),
+  clientEmail: text("client_email"),
   objet: text("objet").notNull(),
   statut: devisStatutEnum("statut").notNull().default("BROUILLON"),
   montantHt: numeric("montant_ht", { precision: 12, scale: 2 }).notNull().default("0"),

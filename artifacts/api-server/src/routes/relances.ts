@@ -1,10 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { db, devisTable, relancesTable } from "@magestion/db";
+import { db, devisTable, licencesTable, relancesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
+import { EmailNotConfiguredError, sendMail } from "../lib/mail.js";
 
 export const relancesRouter = Router();
+relancesRouter.use(requireModuleAccess("relances"));
 
 // Sectoriel : ~30% des devis ne sont jamais relances. Paliers J+7/J+14/J+30
 // calcules a la volee depuis devis.dateEnvoi — pas de champ stocke, pas de
@@ -92,6 +95,29 @@ relancesRouter.post("/", async (req, res) => {
     .insert(relancesTable)
     .values({ licenceId, devisId: parsed.data.devisId, type: parsed.data.type, notes: parsed.data.notes })
     .returning();
+
+  // Une relance APPEL/SMS/AUTRE reste un simple log (action faite hors app).
+  // Seule une relance EMAIL declenche un envoi reel — non bloquant : la
+  // relance est deja enregistree ci-dessus quoi qu'il arrive.
+  if ((parsed.data.type ?? "EMAIL") === "EMAIL") {
+    if (!devis.clientEmail) {
+      res.status(201).json({ ...created, emailSent: false, emailError: "Aucun email client renseigne sur ce devis" });
+      return;
+    }
+    try {
+      const [licence] = await db.select().from(licencesTable).where(eq(licencesTable.id, licenceId)).limit(1);
+      await sendMail({
+        to: devis.clientEmail,
+        subject: `Relance — Devis ${devis.numero} en attente de reponse`,
+        html: `<p>Bonjour,</p><p>Nous revenons vers vous concernant le devis <strong>${devis.numero}</strong> ("${devis.objet}") envoye le ${devis.dateEnvoi ? new Date(devis.dateEnvoi).toLocaleDateString("fr-FR") : ""}, reste sans reponse a ce jour.</p><p>N'hesitez pas a nous contacter pour toute question.</p><p>Cordialement,<br/>${licence?.nom ?? ""}</p>`,
+      });
+      res.status(201).json({ ...created, emailSent: true });
+    } catch (err) {
+      const emailError = err instanceof EmailNotConfiguredError ? err.message : "Echec de l'envoi de l'email";
+      res.status(201).json({ ...created, emailSent: false, emailError });
+    }
+    return;
+  }
 
   res.status(201).json(created);
 });

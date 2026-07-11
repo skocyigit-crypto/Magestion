@@ -25,8 +25,8 @@ export interface AgendaEventInput {
   notes?: string;
 }
 
-export function listAgenda() {
-  return apiFetch<AgendaEvent[]>("/agenda");
+export function listAgenda(onlyInactive = false) {
+  return apiFetch<AgendaEvent[]>(`/agenda${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
 
 export function createAgendaEvent(input: AgendaEventInput) {
@@ -35,6 +35,15 @@ export function createAgendaEvent(input: AgendaEventInput) {
 
 export function updateAgendaStatut(id: string, statut: AgendaStatut) {
   return apiFetch<AgendaEvent>(`/agenda/${id}`, { method: "PATCH", body: JSON.stringify({ statut }) });
+}
+
+export interface AgendaEventUpdateInput extends Partial<AgendaEventInput> {
+  statut?: AgendaStatut;
+  active?: boolean;
+}
+
+export function updateAgendaEvent(id: string, input: AgendaEventUpdateInput) {
+  return apiFetch<AgendaEvent>(`/agenda/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export const TYPE_LABELS: Record<AgendaType, string> = {

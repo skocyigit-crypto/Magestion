@@ -3,8 +3,10 @@ import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db, commandesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 
 export const commandesRouter = Router();
+commandesRouter.use(requireModuleAccess("commandes"));
 
 const commandeInputSchema = z.object({
   fournisseur: z.string().min(1).max(200),

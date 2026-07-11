@@ -3,8 +3,10 @@ import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db, articlesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 
 export const articlesRouter = Router();
+articlesRouter.use(requireModuleAccess("articles"));
 
 const CATEGORIE_ENUM = z.enum(["FOURNITURE", "MAIN_OEUVRE", "MATERIEL", "SOUS_TRAITANCE", "DIVERS"]);
 

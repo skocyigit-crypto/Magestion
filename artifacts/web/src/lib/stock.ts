@@ -20,12 +20,20 @@ export interface StockItemInput {
   prixUnitaireHt?: number;
 }
 
-export function listStockItems() {
-  return apiFetch<StockItem[]>("/stock");
+export interface StockItemUpdateInput extends Partial<StockItemInput> {
+  active?: boolean;
+}
+
+export function listStockItems(onlyInactive = false) {
+  return apiFetch<StockItem[]>(`/stock${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
 
 export function createStockItem(input: StockItemInput) {
   return apiFetch<StockItem>("/stock", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function updateStockItem(id: string, input: StockItemUpdateInput) {
+  return apiFetch<StockItem>(`/stock/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export function createMouvement(stockItemId: string, type: "ENTREE" | "SORTIE", quantite: number, motif?: string) {

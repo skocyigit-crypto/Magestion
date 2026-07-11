@@ -3,8 +3,10 @@ import { z } from "zod";
 import { and, eq, gte, lte } from "drizzle-orm";
 import { db, planningAffectationsTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 
 export const planningPersonnelRouter = Router();
+planningPersonnelRouter.use(requireModuleAccess("planningPersonnel"));
 
 const TYPE_ENUM = z.enum(["CHANTIER", "CONGE", "MALADIE", "FORMATION", "DEPLACEMENT", "REPOS", "BUREAU"]);
 
@@ -74,26 +76,57 @@ planningPersonnelRouter.post("/", async (req, res) => {
   res.status(201).json(created);
 });
 
-// Retrait = desactivation reversible (regle produit, pas de DELETE).
+const affectationUpdateSchema = affectationInputSchema.partial().extend({ active: z.boolean().optional() });
+
+// Retrait = desactivation reversible (regle produit, pas de DELETE) ; les
+// autres champs restent modifiables (correction d'une affectation saisie
+// par erreur), avec la meme detection de conflit qu'a la creation.
 planningPersonnelRouter.patch("/:id", async (req, res) => {
   const licenceId = requireLicenceId(req.user!, res);
   if (!licenceId) return;
 
-  const parsed = z.object({ active: z.boolean() }).safeParse(req.body);
+  const parsed = affectationUpdateSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Requete invalide" });
+    res.status(400).json({ error: "Requete invalide", details: parsed.error.flatten() });
     return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(planningAffectationsTable)
+    .where(and(eq(planningAffectationsTable.id, req.params.id), eq(planningAffectationsTable.licenceId, licenceId)))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Affectation introuvable" });
+    return;
+  }
+
+  const employeeId = parsed.data.employeeId ?? existing.employeeId;
+  const date = parsed.data.date ?? existing.date;
+  if (parsed.data.employeeId !== undefined || parsed.data.date !== undefined) {
+    const [conflit] = await db
+      .select()
+      .from(planningAffectationsTable)
+      .where(
+        and(
+          eq(planningAffectationsTable.licenceId, licenceId),
+          eq(planningAffectationsTable.employeeId, employeeId),
+          eq(planningAffectationsTable.date, date),
+          eq(planningAffectationsTable.active, true),
+        ),
+      )
+      .limit(1);
+    if (conflit && conflit.id !== existing.id) {
+      res.status(409).json({ error: "Conflit : cet employe a deja une affectation ce jour-la" });
+      return;
+    }
   }
 
   const [updated] = await db
     .update(planningAffectationsTable)
-    .set({ active: parsed.data.active })
+    .set(parsed.data)
     .where(and(eq(planningAffectationsTable.id, req.params.id), eq(planningAffectationsTable.licenceId, licenceId)))
     .returning();
 
-  if (!updated) {
-    res.status(404).json({ error: "Affectation introuvable" });
-    return;
-  }
   res.json(updated);
 });

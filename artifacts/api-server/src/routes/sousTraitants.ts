@@ -3,9 +3,11 @@ import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db, sousTraitantsTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 import { isValidSiret } from "../lib/siret.js";
 
 export const sousTraitantsRouter = Router();
+sousTraitantsRouter.use(requireModuleAccess("sousTraitants"));
 
 const sousTraitantInputSchema = z.object({
   raisonSociale: z.string().min(1).max(200),

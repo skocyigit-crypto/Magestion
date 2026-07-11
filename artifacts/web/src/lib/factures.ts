@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api";
+import { apiFetch, downloadFile } from "@/lib/api";
 
 export type FactureStatut = "BROUILLON" | "ENVOYEE" | "PAYEE" | "EN_RETARD";
 
@@ -8,6 +8,7 @@ export interface Facture {
   devisId: string | null;
   numero: string;
   client: string;
+  clientEmail: string | null;
   objet: string;
   statut: FactureStatut;
   montantHt: string;
@@ -19,6 +20,11 @@ export interface Facture {
   updatedAt: string;
 }
 
+export interface FactureStatutChangeResult extends Facture {
+  emailSent?: boolean;
+  emailError?: string;
+}
+
 export function listFactures() {
   return apiFetch<Facture[]>("/factures");
 }
@@ -28,7 +34,24 @@ export function getFacture(id: string) {
 }
 
 export function changeFactureStatut(id: string, statut: "ENVOYEE" | "PAYEE" | "EN_RETARD") {
-  return apiFetch<Facture>(`/factures/${id}/statut`, { method: "POST", body: JSON.stringify({ statut }) });
+  return apiFetch<FactureStatutChangeResult>(`/factures/${id}/statut`, { method: "POST", body: JSON.stringify({ statut }) });
+}
+
+export interface FactureUpdateInput {
+  objet?: string;
+  clientEmail?: string;
+  montantHt?: number;
+  tauxTva?: 0 | 5.5 | 10 | 20;
+  dateEcheance?: string;
+}
+
+// Le backend renvoie 423 si la facture n'est plus BROUILLON (immutabilite post-emission).
+export function updateFacture(id: string, input: FactureUpdateInput) {
+  return apiFetch<Facture>(`/factures/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export function downloadFacturePdf(id: string, numero: string) {
+  return downloadFile(`/factures/${id}/pdf`, `facture-${numero}.pdf`);
 }
 
 export const FACTURE_STATUT_LABELS: Record<FactureStatut, string> = {

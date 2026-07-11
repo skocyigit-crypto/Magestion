@@ -3,9 +3,11 @@ import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { db, situationsTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 import { computeSituationMontants } from "../lib/situationCalc.js";
 
 export const situationsRouter = Router();
+situationsRouter.use(requireModuleAccess("situations"));
 
 function withMontants(row: typeof situationsTable.$inferSelect, cumulPrecedentHt: number) {
   const montants = computeSituationMontants({
@@ -123,6 +125,62 @@ situationsRouter.get("/:id", async (req, res) => {
   const previous = await loadPrevious(situation.projectId, situation.numeroSituation);
   const cumulPrecedentHt = previous ? Number(previous.marcheHt) * (Number(previous.avancementPercent) / 100) : 0;
   res.json(withMontants(situation, cumulPrecedentHt));
+});
+
+const situationUpdateSchema = situationInputSchema.omit({ projectId: true }).partial();
+
+// Correction possible UNIQUEMENT tant que la situation est en BROUILLON —
+// verrouillage definitif a la validation (regle produit, comme les factures).
+situationsRouter.patch("/:id", async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  const parsed = situationUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Requete invalide", details: parsed.error.flatten() });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(situationsTable)
+    .where(and(eq(situationsTable.id, req.params.id), eq(situationsTable.licenceId, licenceId)))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Situation introuvable" });
+    return;
+  }
+  if (existing.statut !== "BROUILLON") {
+    res.status(423).json({ error: "Situation verrouillee (deja validee)" });
+    return;
+  }
+
+  const { marcheHt, avancementPercent, tauxTva, tauxRetenueGarantie } = parsed.data;
+  if (avancementPercent !== undefined) {
+    const previous = await loadPrevious(existing.projectId, existing.numeroSituation);
+    if (previous && avancementPercent < Number(previous.avancementPercent)) {
+      res.status(409).json({
+        error: `Avancement (${avancementPercent}%) inferieur a la situation precedente (${previous.avancementPercent}%) — non autorise`,
+      });
+      return;
+    }
+  }
+
+  const [updated] = await db
+    .update(situationsTable)
+    .set({
+      ...(marcheHt !== undefined ? { marcheHt: marcheHt.toString() } : {}),
+      ...(avancementPercent !== undefined ? { avancementPercent: avancementPercent.toString() } : {}),
+      ...(tauxTva !== undefined ? { tauxTva: tauxTva.toString() } : {}),
+      ...(tauxRetenueGarantie !== undefined ? { tauxRetenueGarantie: tauxRetenueGarantie.toString() } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(situationsTable.id, req.params.id), eq(situationsTable.licenceId, licenceId)))
+    .returning();
+
+  const previous = await loadPrevious(updated.projectId, updated.numeroSituation);
+  const cumulPrecedentHt = previous ? Number(previous.marcheHt) * (Number(previous.avancementPercent) / 100) : 0;
+  res.json(withMontants(updated, cumulPrecedentHt));
 });
 
 // Validation = verrouillage definitif (regle produit, comme les factures) :

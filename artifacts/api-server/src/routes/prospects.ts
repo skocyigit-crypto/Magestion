@@ -3,9 +3,11 @@ import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db, prospectsTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 import { computeLeadScore } from "../lib/leadScoring.js";
 
 export const prospectsRouter = Router();
+prospectsRouter.use(requireModuleAccess("prospects"));
 
 const urgenceEnum = z.enum(["BASSE", "NORMALE", "URGENTE", "TRES_URGENTE"]);
 const statutEnum = z.enum(["NOUVEAU", "CONTACTE", "RDV_PLANIFIE", "DEVIS_ENVOYE", "NEGOCIATION", "GAGNE", "PERDU"]);

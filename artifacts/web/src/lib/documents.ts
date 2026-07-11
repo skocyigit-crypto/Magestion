@@ -16,8 +16,12 @@ export interface DocumentItem {
   createdAt: string;
 }
 
-export function listDocuments() {
-  return apiFetch<DocumentItem[]>("/documents");
+// NB: le backend (routes/documents.ts) ne lit PAS onlyInactive aujourd'hui —
+// GET /documents filtre en dur `active = true` cote serveur. Ce parametre est
+// prepare par coherence avec les autres modules (employees, projects, ...)
+// mais n'a actuellement aucun effet tant que le backend n'est pas corrige.
+export function listDocuments(onlyInactive = false) {
+  return apiFetch<DocumentItem[]>(`/documents${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
 
 const API_BASE = `${import.meta.env.VITE_API_URL ?? ""}/api`;
@@ -57,6 +61,17 @@ export async function downloadDocument(id: string, nom: string) {
   link.download = nom;
   link.click();
   URL.revokeObjectURL(link.href);
+}
+
+export interface DocumentUpdateInput {
+  nom?: string;
+  type?: DocumentType;
+  dateExpiration?: string;
+  active?: boolean;
+}
+
+export function updateDocument(id: string, input: DocumentUpdateInput) {
+  return apiFetch<DocumentItem>(`/documents/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export const TYPE_LABELS: Record<DocumentType, string> = {

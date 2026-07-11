@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,13 +8,20 @@ import { PALIER_COLORS, PALIER_LABELS, listRelancesAFaire, logRelance } from "@/
 export default function RelancesPage() {
   const queryClient = useQueryClient();
   const { data: aFaire } = useQuery({ queryKey: ["relances", "a-faire"], queryFn: listRelancesAFaire });
+  const [notices, setNotices] = useState<Record<string, string>>({});
 
   const all = aFaire ?? [];
   const j30 = all.filter((r) => r.palier === "J30").length;
 
   async function handleRelancer(devisId: string) {
-    await logRelance(devisId, "EMAIL");
+    const result = await logRelance(devisId, "EMAIL");
     await queryClient.invalidateQueries({ queryKey: ["relances"] });
+    const notice = result.emailSent
+      ? "Email de relance envoye."
+      : result.emailError
+        ? `Relance enregistree, email non envoye : ${result.emailError}`
+        : "Relance enregistree.";
+    setNotices((prev) => ({ ...prev, [devisId]: notice }));
   }
 
   return (
@@ -41,10 +49,11 @@ export default function RelancesPage() {
                   {r.objet} — {Number(r.montantHt).toLocaleString("fr-FR")} € HT — envoye il y a {r.joursDepuisEnvoi} jours
                   {r.nbRelancesEffectuees > 0 && ` — ${r.nbRelancesEffectuees} relance(s) deja effectuee(s)`}
                 </p>
+                {notices[r.devisId] && <p className="mt-1 text-xs text-muted-foreground">{notices[r.devisId]}</p>}
               </div>
               <div className="flex items-center gap-3">
                 <span className={`text-sm font-semibold ${PALIER_COLORS[r.palier]}`}>{PALIER_LABELS[r.palier]}</span>
-                <Button size="sm" onClick={() => handleRelancer(r.devisId)}>Marquer relance</Button>
+                <Button size="sm" onClick={() => handleRelancer(r.devisId)}>Envoyer relance par email</Button>
               </div>
             </div>
           ))}

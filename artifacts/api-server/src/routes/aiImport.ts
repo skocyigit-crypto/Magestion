@@ -3,8 +3,10 @@ import multer from "multer";
 import { z } from "zod";
 import { extractJsonFromImage, GeminiNotConfiguredError } from "../lib/gemini.js";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 
 export const aiImportRouter = Router();
+aiImportRouter.use(requireModuleAccess("aiImport"));
 
 // Memoire uniquement (pas de persistance disque) : l'image sert juste a
 // l'extraction, elle n'est pas stockee comme document.

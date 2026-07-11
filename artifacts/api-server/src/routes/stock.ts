@@ -3,8 +3,10 @@ import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
 import { db, stockItemsTable, stockMovementsTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 
 export const stockRouter = Router();
+stockRouter.use(requireModuleAccess("stock"));
 
 const stockItemInputSchema = z.object({
   nom: z.string().min(1).max(200),
@@ -51,6 +53,40 @@ stockRouter.post("/", async (req, res) => {
     .returning();
 
   res.status(201).json(created);
+});
+
+const stockItemUpdateSchema = stockItemInputSchema.partial().extend({ active: z.boolean().optional() });
+
+// Pas de DELETE : archivage uniquement via PATCH { active: false } (regle produit).
+// La quantiteActuelle n'est jamais modifiable directement ici — uniquement via
+// /mouvements (ENTREE/SORTIE), pour garder un historique coherent des stocks.
+stockRouter.patch("/:id", async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  const parsed = stockItemUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Requete invalide", details: parsed.error.flatten() });
+    return;
+  }
+
+  const { seuilAlerte, prixUnitaireHt, ...rest } = parsed.data;
+  const [updated] = await db
+    .update(stockItemsTable)
+    .set({
+      ...rest,
+      ...(seuilAlerte !== undefined ? { seuilAlerte: seuilAlerte.toString() } : {}),
+      ...(prixUnitaireHt !== undefined ? { prixUnitaireHt: prixUnitaireHt.toString() } : {}),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(stockItemsTable.id, req.params.id), eq(stockItemsTable.licenceId, licenceId)))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Article de stock introuvable" });
+    return;
+  }
+  res.json(updated);
 });
 
 const mouvementInputSchema = z.object({

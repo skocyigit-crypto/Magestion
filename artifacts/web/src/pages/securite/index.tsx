@@ -6,15 +6,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { GRAVITE_COLORS, GRAVITE_LABELS, createIncident, listIncidents, type Gravite, type IncidentInput } from "@/lib/securite";
+import {
+  GRAVITE_COLORS,
+  GRAVITE_LABELS,
+  createIncident,
+  listIncidents,
+  updateIncident,
+  type Gravite,
+  type Incident,
+  type IncidentInput,
+} from "@/lib/securite";
 
 const EMPTY_FORM: IncidentInput = { titre: "", typeIncident: "", gravite: "FAIBLE" };
 
 export default function SecuritePage() {
   const queryClient = useQueryClient();
-  const { data: incidents } = useQuery({ queryKey: ["securite"], queryFn: listIncidents });
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: incidents } = useQuery({
+    queryKey: ["securite", showArchived],
+    queryFn: () => listIncidents(showArchived),
+  });
 
   const [isOpen, setIsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<IncidentInput>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,20 +36,48 @@ export default function SecuritePage() {
   const all = incidents ?? [];
   const critiques = all.filter((i) => i.gravite === "CRITIQUE" || i.gravite === "ELEVEE").length;
 
-  async function handleCreate(e: React.FormEvent) {
+  function openCreate() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setIsOpen(true);
+  }
+
+  function openEdit(incident: Incident) {
+    setEditingId(incident.id);
+    setForm({
+      titre: incident.titre,
+      typeIncident: incident.typeIncident,
+      gravite: incident.gravite,
+      description: incident.description ?? undefined,
+      projectId: incident.projectId ?? undefined,
+    });
+    setIsOpen(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await createIncident(form);
+      if (editingId) {
+        await updateIncident(editingId, form);
+      } else {
+        await createIncident(form);
+      }
       await queryClient.invalidateQueries({ queryKey: ["securite"] });
       setIsOpen(false);
       setForm(EMPTY_FORM);
+      setEditingId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la creation");
+      setError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleToggleActive(incident: Incident) {
+    await updateIncident(incident.id, { active: !incident.active });
+    await queryClient.invalidateQueries({ queryKey: ["securite"] });
   }
 
   return (
@@ -43,7 +85,13 @@ export default function SecuritePage() {
       <div className="mx-auto max-w-4xl px-6 py-8">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Securite — Incidents</h1>
-          <Button onClick={() => setIsOpen(true)}>Signaler un incident</Button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+              Afficher les archives
+            </label>
+            <Button onClick={openCreate}>Signaler un incident</Button>
+          </div>
         </div>
 
         <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
@@ -59,13 +107,19 @@ export default function SecuritePage() {
 
         <div className="flex flex-col gap-2">
           {all.map((i) => (
-            <div key={i.id} className="rounded-lg border border-border p-4">
+            <div key={i.id} className={`rounded-lg border border-border p-4 ${i.active ? "" : "opacity-60"}`}>
               <div className="mb-1 flex items-center justify-between">
                 <p className="font-medium">{i.titre}</p>
                 <span className={`text-sm font-semibold ${GRAVITE_COLORS[i.gravite]}`}>{GRAVITE_LABELS[i.gravite]}</span>
               </div>
               <p className="text-sm text-muted-foreground">{i.typeIncident}</p>
               {i.description && <p className="mt-1 text-sm">{i.description}</p>}
+              <div className="mt-2 flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => openEdit(i)}>Modifier</Button>
+                <Button variant="outline" size="sm" onClick={() => handleToggleActive(i)}>
+                  {i.active ? "Archiver" : "Reactiver"}
+                </Button>
+              </div>
             </div>
           ))}
           {all.length === 0 && <p className="text-muted-foreground">Aucun incident signale.</p>}
@@ -74,9 +128,9 @@ export default function SecuritePage() {
 
       <Dialog open={isOpen} onClose={() => setIsOpen(false)}>
         <DialogHeader>
-          <DialogTitle>Signaler un incident</DialogTitle>
+          <DialogTitle>{editingId ? "Modifier l'incident" : "Signaler un incident"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="titre">Titre</Label>
             <Input id="titre" required value={form.titre} onChange={(e) => setForm({ ...form, titre: e.target.value })} />
@@ -110,7 +164,7 @@ export default function SecuritePage() {
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Annuler</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Envoi..." : "Signaler"}</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Enregistrement..." : editingId ? "Enregistrer" : "Signaler"}</Button>
           </div>
         </form>
       </Dialog>

@@ -41,6 +41,11 @@ export function validerSituation(id: string) {
   return apiFetch<Situation>(`/situations/${id}/valider`, { method: "POST" });
 }
 
+// Uniquement possible tant que statut === "BROUILLON" (verrouillage a la validation, cote serveur).
+export function updateSituation(id: string, input: Partial<Omit<SituationInput, "projectId">>) {
+  return apiFetch<Situation>(`/situations/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
 export const STATUT_LABELS: Record<SituationStatut, string> = {
   BROUILLON: "Brouillon",
   VALIDEE: "Validee",

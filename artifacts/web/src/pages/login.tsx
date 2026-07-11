@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { login, setToken } from "@/lib/api";
+import { login, setToken, setUser } from "@/lib/api";
 
 export default function LoginPage() {
   const [, navigate] = useLocation();
@@ -18,8 +18,9 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const { token } = await login(email, password);
+      const { token, user } = await login(email, password);
       setToken(token);
+      setUser(user);
       navigate("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de connexion");
@@ -60,6 +61,9 @@ export default function LoginPage() {
             {loading ? "Connexion..." : "Se connecter"}
           </Button>
         </form>
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          Pas encore de compte ? <Link href="/signup" className="text-primary hover:underline">Essai gratuit 14 jours</Link>
+        </p>
       </Card>
     </div>
   );

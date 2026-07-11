@@ -20,12 +20,20 @@ export interface ArticleInput {
   prixUnitaireHt: number;
 }
 
-export function listArticles() {
-  return apiFetch<Article[]>("/articles");
+export interface ArticleUpdateInput extends Partial<ArticleInput> {
+  active?: boolean;
+}
+
+export function listArticles(onlyInactive = false) {
+  return apiFetch<Article[]>(`/articles${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
 
 export function createArticle(input: ArticleInput) {
   return apiFetch<Article>("/articles", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function updateArticle(id: string, input: ArticleUpdateInput) {
+  return apiFetch<Article>(`/articles/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export const CATEGORIE_LABELS: Record<ArticleCategorie, string> = {

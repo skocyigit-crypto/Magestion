@@ -7,16 +7,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { listArticles } from "@/lib/articles";
-import { createOuvrage, listOuvrages, type CompositionLine, type OuvrageInput } from "@/lib/ouvrages";
+import {
+  createOuvrage,
+  getComposition,
+  listOuvrages,
+  updateOuvrage,
+  type CompositionLine,
+  type Ouvrage,
+  type OuvrageInput,
+} from "@/lib/ouvrages";
 
 const EMPTY_FORM = { code: "", libelle: "", unite: "u", coefficientK: 1.3 };
 
 export default function OuvragesPage() {
   const queryClient = useQueryClient();
-  const { data: ouvrages } = useQuery({ queryKey: ["ouvrages"], queryFn: listOuvrages });
-  const { data: articles } = useQuery({ queryKey: ["articles"], queryFn: listArticles });
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: ouvrages } = useQuery({
+    queryKey: ["ouvrages", showArchived],
+    queryFn: () => listOuvrages(showArchived),
+  });
+  const { data: articles } = useQuery({ queryKey: ["articles"], queryFn: () => listArticles() });
 
   const [isOpen, setIsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [composition, setComposition] = useState<CompositionLine[]>([]);
   const [saving, setSaving] = useState(false);
@@ -53,7 +66,34 @@ export default function OuvragesPage() {
     setComposition(composition.filter((_, idx) => idx !== i));
   }
 
-  async function handleCreate(e: React.FormEvent) {
+  function openCreate() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setComposition([]);
+    setError(null);
+    setIsOpen(true);
+  }
+
+  async function openEdit(ouvrage: Ouvrage) {
+    setEditingId(ouvrage.id);
+    setForm({
+      code: ouvrage.code,
+      libelle: ouvrage.libelle,
+      unite: ouvrage.unite,
+      coefficientK: Number(ouvrage.coefficientK),
+    });
+    setError(null);
+    setIsOpen(true);
+    const lignes = await getComposition(ouvrage.id);
+    setComposition(lignes.map((l) => ({ articleId: l.articleId, quantite: Number(l.quantite) })));
+  }
+
+  async function handleToggleActive(ouvrage: Ouvrage) {
+    await updateOuvrage(ouvrage.id, { active: !ouvrage.active });
+    await queryClient.invalidateQueries({ queryKey: ["ouvrages"] });
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (composition.length === 0) {
       setError("Ajoutez au moins un article a la composition");
@@ -63,13 +103,18 @@ export default function OuvragesPage() {
     setError(null);
     try {
       const input: OuvrageInput = { ...form, composition };
-      await createOuvrage(input);
+      if (editingId) {
+        await updateOuvrage(editingId, input);
+      } else {
+        await createOuvrage(input);
+      }
       await queryClient.invalidateQueries({ queryKey: ["ouvrages"] });
       setIsOpen(false);
+      setEditingId(null);
       setForm(EMPTY_FORM);
       setComposition([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la creation");
+      setError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
     } finally {
       setSaving(false);
     }
@@ -80,7 +125,13 @@ export default function OuvragesPage() {
       <div className="mx-auto max-w-5xl px-6 py-8">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Ouvrages — Bibliotheque</h1>
-          <Button onClick={() => setIsOpen(true)} disabled={(articles ?? []).length === 0}>Nouvel ouvrage</Button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+              Afficher les archives
+            </label>
+            <Button onClick={openCreate} disabled={(articles ?? []).length === 0}>Nouvel ouvrage</Button>
+          </div>
         </div>
         {(articles ?? []).length === 0 && (
           <p className="mb-4 text-sm text-muted-foreground">Creez d'abord des articles pour pouvoir composer un ouvrage.</p>
@@ -106,20 +157,29 @@ export default function OuvragesPage() {
                 <th className="px-4 py-2">Debourse sec HT</th>
                 <th className="px-4 py-2">Coeff. K</th>
                 <th className="px-4 py-2">Prix de vente HT</th>
+                <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {all.map((o) => (
-                <tr key={o.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                <tr key={o.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${o.active ? "" : "opacity-60"}`}>
                   <td className="px-4 py-2">{o.code}</td>
                   <td className="px-4 py-2">{o.libelle}</td>
                   <td className="px-4 py-2">{Number(o.debourseSecHt).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €</td>
                   <td className="px-4 py-2">{o.coefficientK}</td>
                   <td className="px-4 py-2 font-medium">{Number(o.prixVenteHt).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €</td>
+                  <td className="px-4 py-2">
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="outline" onClick={() => openEdit(o)}>Modifier</Button>
+                      <Button size="sm" variant="outline" onClick={() => handleToggleActive(o)}>
+                        {o.active ? "Archiver" : "Reactiver"}
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {all.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucun ouvrage pour le moment.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucun ouvrage pour le moment.</td></tr>
               )}
             </tbody>
           </table>
@@ -128,9 +188,9 @@ export default function OuvragesPage() {
 
       <Dialog open={isOpen} onClose={() => setIsOpen(false)} className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Nouvel ouvrage</DialogTitle>
+          <DialogTitle>{editingId ? "Modifier l'ouvrage" : "Nouvel ouvrage"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="grid grid-cols-3 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="code">Code</Label>
@@ -196,7 +256,7 @@ export default function OuvragesPage() {
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Annuler</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Creation..." : "Creer"}</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Enregistrement..." : editingId ? "Enregistrer" : "Creer"}</Button>
           </div>
         </form>
       </Dialog>

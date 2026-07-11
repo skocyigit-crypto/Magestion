@@ -27,8 +27,8 @@ export interface EmployeeInput {
   tauxHoraire?: number;
 }
 
-export function listEmployees() {
-  return apiFetch<Employee[]>("/employees");
+export function listEmployees(onlyInactive = false) {
+  return apiFetch<Employee[]>(`/employees${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
 
 export function createEmployee(input: EmployeeInput) {
@@ -37,6 +37,14 @@ export function createEmployee(input: EmployeeInput) {
 
 export function updateEmployeeStatut(id: string, statut: EmployeeStatut) {
   return apiFetch<Employee>(`/employees/${id}`, { method: "PATCH", body: JSON.stringify({ statut }) });
+}
+
+export interface EmployeeUpdateInput extends Partial<EmployeeInput> {
+  active?: boolean;
+}
+
+export function updateEmployee(id: string, input: EmployeeUpdateInput) {
+  return apiFetch<Employee>(`/employees/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export const ROLE_LABELS: Record<EmployeeRole, string> = {

@@ -7,9 +7,11 @@ import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db, documentsTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 import { STORAGE_DIR } from "../lib/storage.js";
 
 export const documentsRouter = Router();
+documentsRouter.use(requireModuleAccess("documents"));
 
 const MAX_SIZE = 20 * 1024 * 1024; // 20 Mo
 
@@ -40,7 +42,11 @@ documentsRouter.get("/", async (req, res) => {
   const licenceId = requireLicenceId(req.user!, res);
   if (!licenceId) return;
 
-  const rows = await db.select().from(documentsTable).where(and(eq(documentsTable.licenceId, licenceId), eq(documentsTable.active, true)));
+  const onlyInactive = req.query.onlyInactive === "true";
+  const rows = await db
+    .select()
+    .from(documentsTable)
+    .where(and(eq(documentsTable.licenceId, licenceId), eq(documentsTable.active, !onlyInactive)));
   res.json(rows);
 });
 
@@ -103,20 +109,31 @@ documentsRouter.get("/:id/download", async (req, res) => {
   res.download(join(STORAGE_DIR, doc.cheminFichier), doc.nom);
 });
 
+const documentUpdateSchema = z.object({
+  nom: z.string().min(1).max(300).optional(),
+  type: TYPE_ENUM.optional(),
+  entityType: ENTITY_TYPE_ENUM.optional(),
+  entityId: z.string().uuid().optional(),
+  dateExpiration: z.string().optional(),
+  active: z.boolean().optional(),
+});
+
 // Pas de DELETE : archivage uniquement via PATCH { active: false } (regle produit).
+// Renommer/reclasser un document ne touche jamais au fichier physique
+// (cheminFichier), seuls les metadonnees sont modifiables ici.
 documentsRouter.patch("/:id", async (req, res) => {
   const licenceId = requireLicenceId(req.user!, res);
   if (!licenceId) return;
 
-  const parsed = z.object({ active: z.boolean() }).safeParse(req.body);
+  const parsed = documentUpdateSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Requete invalide" });
+    res.status(400).json({ error: "Requete invalide", details: parsed.error.flatten() });
     return;
   }
 
   const [updated] = await db
     .update(documentsTable)
-    .set({ active: parsed.data.active })
+    .set(parsed.data)
     .where(and(eq(documentsTable.id, req.params.id), eq(documentsTable.licenceId, licenceId)))
     .returning();
 

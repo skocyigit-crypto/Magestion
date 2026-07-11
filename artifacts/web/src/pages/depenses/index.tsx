@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { montantTtc } from "@/lib/devis";
+import { listProjects } from "@/lib/projects";
 import {
   CATEGORIE_LABELS,
   NEXT_STATUTS,
@@ -14,6 +15,8 @@ import {
   changeDepenseStatut,
   createDepense,
   listDepenses,
+  updateDepense,
+  type Depense,
   type DepenseCategorie,
   type DepenseInput,
   type DepenseStatut,
@@ -23,9 +26,15 @@ const EMPTY_FORM: DepenseInput = { fournisseur: "", objet: "", montantHt: 0, tau
 
 export default function DepensesPage() {
   const queryClient = useQueryClient();
-  const { data: depenses } = useQuery({ queryKey: ["depenses"], queryFn: listDepenses });
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: depenses } = useQuery({
+    queryKey: ["depenses", showArchived],
+    queryFn: () => listDepenses(showArchived),
+  });
+  const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
 
   const [isOpen, setIsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<DepenseInput>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,17 +44,43 @@ export default function DepensesPage() {
   const aValider = all.filter((d) => d.statut === "A_VALIDER").length;
   const enLitige = all.filter((d) => d.statut === "EN_LITIGE").length;
 
-  async function handleCreate(e: React.FormEvent) {
+  function openCreate() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setIsOpen(true);
+  }
+
+  function openEdit(depense: Depense) {
+    setEditingId(depense.id);
+    setForm({
+      fournisseur: depense.fournisseur,
+      objet: depense.objet,
+      projectId: depense.projectId ?? undefined,
+      montantHt: Number(depense.montantHt),
+      tauxTva: Number(depense.tauxTva) as DepenseInput["tauxTva"],
+      categorie: depense.categorie,
+      autoliquidation: depense.autoliquidation,
+      dateEcheance: depense.dateEcheance ?? undefined,
+    });
+    setIsOpen(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await createDepense(form);
+      if (editingId) {
+        await updateDepense(editingId, form);
+      } else {
+        await createDepense(form);
+      }
       await queryClient.invalidateQueries({ queryKey: ["depenses"] });
       setIsOpen(false);
       setForm(EMPTY_FORM);
+      setEditingId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la creation");
+      setError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
     } finally {
       setSaving(false);
     }
@@ -56,12 +91,23 @@ export default function DepensesPage() {
     await queryClient.invalidateQueries({ queryKey: ["depenses"] });
   }
 
+  async function handleToggleActive(depense: Depense) {
+    await updateDepense(depense.id, { active: !depense.active });
+    await queryClient.invalidateQueries({ queryKey: ["depenses"] });
+  }
+
   return (
     <Layout>
       <div className="mx-auto max-w-6xl px-6 py-8">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Depenses — Factures fournisseurs</h1>
-          <Button onClick={() => setIsOpen(true)}>Nouvelle depense</Button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+              Afficher les archives
+            </label>
+            <Button onClick={openCreate}>Nouvelle depense</Button>
+          </div>
         </div>
 
         <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -92,11 +138,12 @@ export default function DepensesPage() {
                 <th className="px-4 py-2">Objet</th>
                 <th className="px-4 py-2">Montant TTC</th>
                 <th className="px-4 py-2">Statut</th>
+                <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
               {all.map((d) => (
-                <tr key={d.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                <tr key={d.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${d.active ? "" : "opacity-60"}`}>
                   <td className="px-4 py-2">
                     {d.fournisseur}
                     {d.autoliquidation && <span className="ml-2 text-xs text-primary">(autoliq.)</span>}
@@ -120,10 +167,18 @@ export default function DepensesPage() {
                       STATUT_LABELS[d.statut]
                     )}
                   </td>
+                  <td className="px-4 py-2">
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEdit(d)}>Modifier</Button>
+                      <Button variant="outline" size="sm" onClick={() => handleToggleActive(d)}>
+                        {d.active ? "Archiver" : "Reactiver"}
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {all.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucune depense pour le moment.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucune depense pour le moment.</td></tr>
               )}
             </tbody>
           </table>
@@ -132,9 +187,9 @@ export default function DepensesPage() {
 
       <Dialog open={isOpen} onClose={() => setIsOpen(false)}>
         <DialogHeader>
-          <DialogTitle>Nouvelle depense</DialogTitle>
+          <DialogTitle>{editingId ? "Modifier la depense" : "Nouvelle depense"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="fournisseur">Fournisseur</Label>
             <Input id="fournisseur" required value={form.fournisseur} onChange={(e) => setForm({ ...form, fournisseur: e.target.value })} />
@@ -142,6 +197,20 @@ export default function DepensesPage() {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="objet">Objet</Label>
             <Input id="objet" required value={form.objet} onChange={(e) => setForm({ ...form, objet: e.target.value })} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="projectId">Chantier (optionnel)</Label>
+            <select
+              id="projectId"
+              className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+              value={form.projectId ?? ""}
+              onChange={(e) => setForm({ ...form, projectId: e.target.value || undefined })}
+            >
+              <option value="">—</option>
+              {(projects ?? []).map((p) => (
+                <option key={p.id} value={p.id}>{p.nom}</option>
+              ))}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
@@ -192,7 +261,7 @@ export default function DepensesPage() {
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Annuler</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Creation..." : "Creer"}</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Enregistrement..." : editingId ? "Enregistrer" : "Creer"}</Button>
           </div>
         </form>
       </Dialog>

@@ -6,15 +6,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { createMouvement, createStockItem, listStockItems, type StockItemInput } from "@/lib/stock";
+import {
+  createMouvement,
+  createStockItem,
+  listStockItems,
+  updateStockItem,
+  type StockItem,
+  type StockItemInput,
+} from "@/lib/stock";
 
 const EMPTY_FORM: StockItemInput = { nom: "", unite: "u", seuilAlerte: 0, prixUnitaireHt: 0 };
 
 export default function StockPage() {
   const queryClient = useQueryClient();
-  const { data: items } = useQuery({ queryKey: ["stock"], queryFn: listStockItems });
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: items } = useQuery({
+    queryKey: ["stock", showArchived],
+    queryFn: () => listStockItems(showArchived),
+  });
 
   const [isOpen, setIsOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<StockItemInput>(EMPTY_FORM);
   const [mouvementFor, setMouvementFor] = useState<{ id: string; nom: string } | null>(null);
   const [mouvementType, setMouvementType] = useState<"ENTREE" | "SORTIE">("ENTREE");
@@ -25,20 +37,48 @@ export default function StockPage() {
   const all = items ?? [];
   const enAlerte = all.filter((i) => i.enAlerte).length;
 
-  async function handleCreate(e: React.FormEvent) {
+  function openCreate() {
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setIsOpen(true);
+  }
+
+  function openEdit(item: StockItem) {
+    setEditingId(item.id);
+    setForm({
+      nom: item.nom,
+      categorie: item.categorie ?? undefined,
+      unite: item.unite,
+      seuilAlerte: Number(item.seuilAlerte),
+      prixUnitaireHt: Number(item.prixUnitaireHt),
+    });
+    setIsOpen(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await createStockItem(form);
+      if (editingId) {
+        await updateStockItem(editingId, form);
+      } else {
+        await createStockItem(form);
+      }
       await queryClient.invalidateQueries({ queryKey: ["stock"] });
       setIsOpen(false);
       setForm(EMPTY_FORM);
+      setEditingId(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la creation");
+      setError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleToggleActive(item: StockItem) {
+    await updateStockItem(item.id, { active: !item.active });
+    await queryClient.invalidateQueries({ queryKey: ["stock"] });
   }
 
   async function handleMouvement(e: React.FormEvent) {
@@ -60,7 +100,13 @@ export default function StockPage() {
       <div className="mx-auto max-w-5xl px-6 py-8">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Stock & Materiel</h1>
-          <Button onClick={() => setIsOpen(true)}>Nouvel article de stock</Button>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+              Afficher les archives
+            </label>
+            <Button onClick={openCreate}>Nouvel article de stock</Button>
+          </div>
         </div>
 
         <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
@@ -86,14 +132,20 @@ export default function StockPage() {
             </thead>
             <tbody>
               {all.map((item) => (
-                <tr key={item.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${item.enAlerte ? "text-red-400" : ""}`}>
+                <tr key={item.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${item.enAlerte ? "text-red-400" : ""} ${item.active ? "" : "opacity-60"}`}>
                   <td className="px-4 py-2">{item.nom}{item.enAlerte && " ⚠"}</td>
                   <td className="px-4 py-2">{item.quantiteActuelle} {item.unite}</td>
                   <td className="px-4 py-2">{item.seuilAlerte} {item.unite}</td>
                   <td className="px-4 py-2">
-                    <Button size="sm" variant="outline" onClick={() => setMouvementFor({ id: item.id, nom: item.nom })}>
-                      Mouvement
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setMouvementFor({ id: item.id, nom: item.nom })}>
+                        Mouvement
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openEdit(item)}>Modifier</Button>
+                      <Button size="sm" variant="outline" onClick={() => handleToggleActive(item)}>
+                        {item.active ? "Archiver" : "Reactiver"}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -106,8 +158,8 @@ export default function StockPage() {
       </div>
 
       <Dialog open={isOpen} onClose={() => setIsOpen(false)}>
-        <DialogHeader><DialogTitle>Nouvel article de stock</DialogTitle></DialogHeader>
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
+        <DialogHeader><DialogTitle>{editingId ? "Modifier l'article de stock" : "Nouvel article de stock"}</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="nom">Nom</Label>
             <Input id="nom" required value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} />
@@ -128,10 +180,27 @@ export default function StockPage() {
               />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="categorie">Categorie</Label>
+              <Input id="categorie" value={form.categorie ?? ""} onChange={(e) => setForm({ ...form, categorie: e.target.value })} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="prixUnitaireHt">Prix unitaire HT (€)</Label>
+              <Input
+                id="prixUnitaireHt"
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.prixUnitaireHt}
+                onChange={(e) => setForm({ ...form, prixUnitaireHt: Number(e.target.value) })}
+              />
+            </div>
+          </div>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Annuler</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Creation..." : "Creer"}</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Enregistrement..." : editingId ? "Enregistrer" : "Creer"}</Button>
           </div>
         </form>
       </Dialog>

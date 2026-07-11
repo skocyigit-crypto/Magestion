@@ -17,6 +17,7 @@ export const facturesTable = pgTable("factures", {
   devisId: uuid("devis_id").references(() => devisTable.id),
   numero: text("numero").notNull(),
   client: text("client").notNull(),
+  clientEmail: text("client_email"),
   objet: text("objet").notNull(),
   statut: factureStatutEnum("statut").notNull().default("BROUILLON"),
   montantHt: numeric("montant_ht", { precision: 12, scale: 2 }).notNull().default("0"),

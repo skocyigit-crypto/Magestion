@@ -14,6 +14,7 @@ import {
   retirerAffectation,
   startOfWeek,
   toDateStr,
+  updateAffectation,
   type Affectation,
   type AffectationType,
 } from "@/lib/planningPersonnel";
@@ -40,31 +41,61 @@ export default function PlanningPersonnelPage() {
   const debut = toDateStr(weekDays[0]);
   const fin = toDateStr(weekDays[6]);
 
-  const { data: employees } = useQuery({ queryKey: ["employees"], queryFn: listEmployees });
+  const { data: employees } = useQuery({ queryKey: ["employees"], queryFn: () => listEmployees() });
   const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
   const { data: affectations } = useQuery({ queryKey: ["planning-personnel", debut, fin], queryFn: () => listAffectations(debut, fin) });
 
   const [modalCell, setModalCell] = useState<{ employeeId: string; date: string } | null>(null);
+  const [editingAffectation, setEditingAffectation] = useState<Affectation | null>(null);
   const [projectId, setProjectId] = useState("");
   const [type, setType] = useState<AffectationType>("CHANTIER");
   const [chefEquipe, setChefEquipe] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const dialogOpen = !!modalCell || !!editingAffectation;
+
   function findAffectation(employeeId: string, date: string): Affectation | undefined {
     return (affectations ?? []).find((a) => a.employeeId === employeeId && a.date === date);
   }
 
-  async function handleAssign(e: React.FormEvent) {
+  function closeDialog() {
+    setModalCell(null);
+    setEditingAffectation(null);
+    setProjectId("");
+    setType("CHANTIER");
+    setChefEquipe(false);
+    setError(null);
+  }
+
+  function openNewCell(employeeId: string, date: string) {
+    setEditingAffectation(null);
+    setProjectId("");
+    setType("CHANTIER");
+    setChefEquipe(false);
+    setError(null);
+    setModalCell({ employeeId, date });
+  }
+
+  function openEditAffectation(affectation: Affectation) {
+    setModalCell(null);
+    setEditingAffectation(affectation);
+    setProjectId(affectation.projectId ?? "");
+    setType(affectation.type);
+    setChefEquipe(affectation.chefEquipe);
+    setError(null);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!modalCell) return;
     setError(null);
     try {
-      await createAffectation({ employeeId: modalCell.employeeId, date: modalCell.date, projectId: projectId || undefined, type, chefEquipe });
+      if (editingAffectation) {
+        await updateAffectation(editingAffectation.id, { projectId: projectId || undefined, type, chefEquipe });
+      } else if (modalCell) {
+        await createAffectation({ employeeId: modalCell.employeeId, date: modalCell.date, projectId: projectId || undefined, type, chefEquipe });
+      }
       await queryClient.invalidateQueries({ queryKey: ["planning-personnel"] });
-      setModalCell(null);
-      setProjectId("");
-      setType("CHANTIER");
-      setChefEquipe(false);
+      closeDialog();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur");
     }
@@ -73,6 +104,7 @@ export default function PlanningPersonnelPage() {
   async function handleRemove(id: string) {
     await retirerAffectation(id);
     await queryClient.invalidateQueries({ queryKey: ["planning-personnel"] });
+    closeDialog();
   }
 
   const projectNom = (id: string | null) => (projects ?? []).find((p) => p.id === id)?.nom ?? "";
@@ -130,8 +162,8 @@ export default function PlanningPersonnelPage() {
                           <button
                             className="w-full rounded px-2 py-1 text-left text-xs text-white"
                             style={{ backgroundColor: affectation.type === "CHANTIER" ? emp.couleur : "#334155" }}
-                            onClick={() => handleRemove(affectation.id)}
-                            title="Cliquer pour retirer"
+                            onClick={() => openEditAffectation(affectation)}
+                            title="Cliquer pour modifier"
                           >
                             {affectation.type === "CHANTIER" ? projectNom(affectation.projectId) || "Chantier" : TYPE_LABELS[affectation.type]}
                             {affectation.chefEquipe && " (CE)"}
@@ -139,7 +171,7 @@ export default function PlanningPersonnelPage() {
                         ) : (
                           <button
                             className="w-full rounded border border-dashed border-border px-2 py-1 text-xs text-muted-foreground hover:border-primary"
-                            onClick={() => setModalCell({ employeeId: emp.id, date })}
+                            onClick={() => openNewCell(emp.id, date)}
                           >
                             +
                           </button>
@@ -157,11 +189,11 @@ export default function PlanningPersonnelPage() {
         </div>
       </div>
 
-      <Dialog open={!!modalCell} onClose={() => setModalCell(null)}>
+      <Dialog open={dialogOpen} onClose={closeDialog}>
         <DialogHeader>
-          <DialogTitle>Nouvelle affectation</DialogTitle>
+          <DialogTitle>{editingAffectation ? "Modifier l'affectation" : "Nouvelle affectation"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleAssign} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="type">Type</Label>
             <select
@@ -199,8 +231,13 @@ export default function PlanningPersonnelPage() {
           )}
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setModalCell(null)}>Annuler</Button>
-            <Button type="submit">Assigner</Button>
+            {editingAffectation && (
+              <Button type="button" variant="outline" onClick={() => handleRemove(editingAffectation.id)}>
+                Retirer
+              </Button>
+            )}
+            <Button type="button" variant="outline" onClick={closeDialog}>Annuler</Button>
+            <Button type="submit">{editingAffectation ? "Enregistrer" : "Assigner"}</Button>
           </div>
         </form>
       </Dialog>

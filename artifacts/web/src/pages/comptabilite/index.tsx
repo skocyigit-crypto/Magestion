@@ -3,16 +3,24 @@ import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { downloadFec, listBalance, listJournal } from "@/lib/comptabilite";
+import { Input } from "@/components/ui/input";
+import { downloadFec, listBalance, listJournal, listPlanComptable } from "@/lib/comptabilite";
 
 const fmt = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-type Tab = "journal" | "balance";
+type Tab = "journal" | "balance" | "plan";
 
 export default function ComptabilitePage() {
   const [tab, setTab] = useState<Tab>("journal");
+  const [exercice, setExercice] = useState<string>("");
+  const exerciceNum = exercice ? Number(exercice) : undefined;
+
   const { data: journal } = useQuery({ queryKey: ["comptabilite", "journal"], queryFn: listJournal });
-  const { data: balance } = useQuery({ queryKey: ["comptabilite", "balance"], queryFn: listBalance });
+  const { data: balance } = useQuery({
+    queryKey: ["comptabilite", "balance", exerciceNum],
+    queryFn: () => listBalance(exerciceNum),
+  });
+  const { data: planComptable } = useQuery({ queryKey: ["comptabilite", "plan-comptable"], queryFn: listPlanComptable });
   const [fecError, setFecError] = useState<string | null>(null);
 
   const totalDebit = useMemo(() => (journal ?? []).reduce((s, l) => s + Number(l.debit), 0), [journal]);
@@ -23,7 +31,7 @@ export default function ComptabilitePage() {
   async function handleDownloadFec() {
     setFecError(null);
     try {
-      await downloadFec();
+      await downloadFec(exerciceNum);
     } catch (err) {
       setFecError(err instanceof Error ? err.message : "Erreur");
     }
@@ -34,9 +42,22 @@ export default function ComptabilitePage() {
       <div className="mx-auto max-w-6xl px-6 py-8">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-semibold">Comptabilite</h1>
-          <div className="flex flex-col items-end gap-1">
-            <Button onClick={handleDownloadFec}>Exporter FEC</Button>
-            {fecError && <p className="text-xs text-red-400">{fecError}</p>}
+          <div className="flex items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="exercice" className="text-xs text-muted-foreground">Exercice (annee)</label>
+              <Input
+                id="exercice"
+                type="number"
+                placeholder="Tous"
+                className="w-28"
+                value={exercice}
+                onChange={(e) => setExercice(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <Button onClick={handleDownloadFec}>Exporter FEC</Button>
+              {fecError && <p className="text-xs text-red-400">{fecError}</p>}
+            </div>
           </div>
         </div>
 
@@ -69,6 +90,9 @@ export default function ComptabilitePage() {
           </Button>
           <Button variant={tab === "balance" ? "default" : "outline"} size="sm" onClick={() => setTab("balance")}>
             Balance de verification
+          </Button>
+          <Button variant={tab === "plan" ? "default" : "outline"} size="sm" onClick={() => setTab("plan")}>
+            Plan comptable
           </Button>
         </div>
 
@@ -130,6 +154,30 @@ export default function ComptabilitePage() {
                 ))}
                 {(balance ?? []).length === 0 && (
                   <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucune donnee pour le moment.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {tab === "plan" && (
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="px-3 py-2">Compte</th>
+                  <th className="px-3 py-2">Libelle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(planComptable ?? []).map((c) => (
+                  <tr key={c.compteNum} className="border-b border-border last:border-0 hover:bg-muted/30">
+                    <td className="px-3 py-2">{c.compteNum}</td>
+                    <td className="px-3 py-2">{c.libelle}</td>
+                  </tr>
+                ))}
+                {(planComptable ?? []).length === 0 && (
+                  <tr><td colSpan={2} className="px-4 py-6 text-center text-muted-foreground">Aucun compte pour le moment.</td></tr>
                 )}
               </tbody>
             </table>

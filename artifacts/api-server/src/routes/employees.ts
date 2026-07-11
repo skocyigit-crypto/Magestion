@@ -3,8 +3,10 @@ import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db, employeesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 
 export const employeesRouter = Router();
+employeesRouter.use(requireModuleAccess("employees"));
 
 const ROLE_ENUM = z.enum([
   "CHEF_CHANTIER", "CONDUCTEUR_TRAVAUX", "MACON", "ELECTRICIEN", "PLOMBIER",

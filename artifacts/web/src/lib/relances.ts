@@ -16,8 +16,16 @@ export function listRelancesAFaire() {
   return apiFetch<RelanceAFaire[]>("/relances/a-faire");
 }
 
+export interface LogRelanceResult {
+  id: string;
+  devisId: string;
+  type: string;
+  emailSent?: boolean;
+  emailError?: string;
+}
+
 export function logRelance(devisId: string, type: "EMAIL" | "APPEL" | "SMS" | "AUTRE", notes?: string) {
-  return apiFetch("/relances", { method: "POST", body: JSON.stringify({ devisId, type, notes }) });
+  return apiFetch<LogRelanceResult>("/relances", { method: "POST", body: JSON.stringify({ devisId, type, notes }) });
 }
 
 export const PALIER_LABELS: Record<string, string> = { J7: "J+7", J14: "J+14", J30: "J+30" };

@@ -3,8 +3,10 @@ import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db, projectsTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
+import { requireModuleAccess } from "../lib/rbac.js";
 
 export const projectsRouter = Router();
+projectsRouter.use(requireModuleAccess("chantiers"));
 
 const projectInputSchema = z.object({
   nom: z.string().min(1).max(200),
