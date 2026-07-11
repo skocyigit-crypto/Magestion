@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,8 +34,14 @@ export default function StockPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
   const all = items ?? [];
   const enAlerte = all.filter((i) => i.enAlerte).length;
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((i) => i.nom.toLowerCase().includes(q));
+  }, [all, search]);
 
   function openCreate() {
     setEditingId(null);
@@ -120,6 +126,13 @@ export default function StockPage() {
           </Card>
         </div>
 
+        <Input
+          placeholder="Rechercher (nom)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="mb-4 max-w-sm"
+        />
+
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
@@ -131,7 +144,7 @@ export default function StockPage() {
               </tr>
             </thead>
             <tbody>
-              {all.map((item) => (
+              {filtered.map((item) => (
                 <tr key={item.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${item.enAlerte ? "text-red-400" : ""} ${item.active ? "" : "opacity-60"}`}>
                   <td className="px-4 py-2">{item.nom}{item.enAlerte && " ⚠"}</td>
                   <td className="px-4 py-2">{item.quantiteActuelle} {item.unite}</td>
@@ -149,7 +162,7 @@ export default function StockPage() {
                   </td>
                 </tr>
               ))}
-              {all.length === 0 && (
+              {filtered.length === 0 && (
                 <tr><td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">Aucun article de stock pour le moment.</td></tr>
               )}
             </tbody>

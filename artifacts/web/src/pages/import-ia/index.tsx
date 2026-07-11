@@ -1,17 +1,28 @@
 import { useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { analyserFactureDepense } from "@/lib/aiImport";
-import { createDepense, type DepenseInput } from "@/lib/depenses";
+import { createDepense, listDepenses, type DepenseInput } from "@/lib/depenses";
+import { montantTtc } from "@/lib/devis";
 
 const EMPTY_FORM: DepenseInput = { fournisseur: "", objet: "", montantHt: 0, tauxTva: 20 };
 
+function isCurrentMonth(dateIso: string): boolean {
+  const d = new Date(dateIso);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
+
 export default function ImportIaPage() {
   const [, navigate] = useLocation();
+  const { data: depenses } = useQuery({ queryKey: ["depenses"], queryFn: () => listDepenses() });
+  const depensesCeMois = (depenses ?? []).filter((d) => isCurrentMonth(d.createdAt));
+  const montantCeMois = depensesCeMois.reduce((sum, d) => sum + montantTtc(d.montantHt, d.tauxTva), 0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -74,6 +85,17 @@ export default function ImportIaPage() {
           Televersez une photo ou un scan de facture fournisseur : l'IA (Gemini) extrait automatiquement
           fournisseur, objet, montant HT, TVA et date d'echeance. Verifiez et corrigez avant de creer la depense.
         </p>
+
+        <div className="mb-6 grid grid-cols-2 gap-4">
+          <Card>
+            <CardHeader><CardTitle>Depenses creees ce mois</CardTitle></CardHeader>
+            <CardContent><p className="text-2xl font-semibold">{depensesCeMois.length}</p></CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Montant TTC ce mois</CardTitle></CardHeader>
+            <CardContent><p className="text-2xl font-semibold">{montantCeMois.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} €</p></CardContent>
+          </Card>
+        </div>
 
         <Card className="mb-6">
           <CardHeader><CardTitle>1. Televerser</CardTitle></CardHeader>

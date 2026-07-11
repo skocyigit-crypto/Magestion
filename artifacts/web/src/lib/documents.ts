@@ -16,10 +16,6 @@ export interface DocumentItem {
   createdAt: string;
 }
 
-// NB: le backend (routes/documents.ts) ne lit PAS onlyInactive aujourd'hui —
-// GET /documents filtre en dur `active = true` cote serveur. Ce parametre est
-// prepare par coherence avec les autres modules (employees, projects, ...)
-// mais n'a actuellement aucun effet tant que le backend n'est pas corrige.
 export function listDocuments(onlyInactive = false) {
   return apiFetch<DocumentItem[]>(`/documents${onlyInactive ? "?onlyInactive=true" : ""}`);
 }
