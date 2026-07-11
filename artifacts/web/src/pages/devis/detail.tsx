@@ -26,7 +26,7 @@ export default function DevisDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
-  const { data: devis, isLoading } = useQuery({ queryKey: ["devis", id], queryFn: () => getDevis(id) });
+  const { data: devis, isLoading, isError } = useQuery({ queryKey: ["devis", id], queryFn: () => getDevis(id) });
   const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
   const { data: facturesList } = useQuery({ queryKey: ["factures"], queryFn: listFactures });
   const factureIssue = (facturesList ?? []).find((f) => f.devisId === id);
@@ -99,6 +99,7 @@ export default function DevisDetailPage() {
   }
 
   if (isLoading) return <Layout><p className="p-8 text-muted-foreground">Chargement...</p></Layout>;
+  if (isError) return <Layout><p className="p-8 text-red-400">Erreur lors du chargement. Veuillez reessayer.</p></Layout>;
   if (!devis) return <Layout><p className="p-8 text-muted-foreground">Devis introuvable.</p></Layout>;
 
   return (

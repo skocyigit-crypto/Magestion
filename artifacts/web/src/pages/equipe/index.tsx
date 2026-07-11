@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +26,7 @@ const STATUT_ORDER: EmployeeStatut[] = ["SUR_CHANTIER", "EN_ROUTE", "ABSENT", "I
 export default function EquipePage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: employees, isLoading } = useQuery({
+  const { data: employees, isLoading, isError } = useQuery({
     queryKey: ["employees", showArchived],
     queryFn: () => listEmployees(showArchived),
   });
@@ -135,6 +136,7 @@ export default function EquipePage() {
           className="mb-4 max-w-sm"
         />
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -143,7 +145,9 @@ export default function EquipePage() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: emp.couleur }} />
-                  <CardTitle className="text-foreground">{emp.prenom} {emp.nom}</CardTitle>
+                  <CardTitle className="text-foreground">
+                    <Link href={`/equipe/${emp.id}`} className="hover:underline">{emp.prenom} {emp.nom}</Link>
+                  </CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col gap-2 text-sm text-muted-foreground">
@@ -166,7 +170,7 @@ export default function EquipePage() {
               </CardContent>
             </Card>
           ))}
-          {!isLoading && filtered.length === 0 && <p className="text-muted-foreground">Aucun employe pour le moment.</p>}
+          {!isLoading && !isError && filtered.length === 0 && <p className="text-muted-foreground">Aucun employe pour le moment.</p>}
         </div>
       </div>
 

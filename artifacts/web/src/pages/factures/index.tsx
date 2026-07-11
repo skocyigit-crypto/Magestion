@@ -8,7 +8,7 @@ import { FACTURE_STATUT_LABELS, listFactures } from "@/lib/factures";
 import { montantTtc } from "@/lib/devis";
 
 export default function FacturesPage() {
-  const { data: factures, isLoading } = useQuery({ queryKey: ["factures"], queryFn: listFactures });
+  const { data: factures, isLoading, isError } = useQuery({ queryKey: ["factures"], queryFn: listFactures });
   const [search, setSearch] = useState("");
   const all = factures ?? [];
 
@@ -58,6 +58,7 @@ export default function FacturesPage() {
           className="mb-4 max-w-sm"
         />
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -83,7 +84,7 @@ export default function FacturesPage() {
                   <td className="px-4 py-2">{FACTURE_STATUT_LABELS[f.statut]}</td>
                 </tr>
               ))}
-              {!isLoading && filtered.length === 0 && (
+              {!isLoading && !isError && filtered.length === 0 && (
                 <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucune facture pour le moment.</td></tr>
               )}
             </tbody>

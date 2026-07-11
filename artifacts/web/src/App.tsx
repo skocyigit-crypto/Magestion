@@ -19,6 +19,7 @@ const CommandesPage = lazy(() => import("@/pages/commandes/index"));
 const SituationsPage = lazy(() => import("@/pages/situations/index"));
 const ComptabilitePage = lazy(() => import("@/pages/comptabilite/index"));
 const EquipePage = lazy(() => import("@/pages/equipe/index"));
+const EmployeeDetailPage = lazy(() => import("@/pages/equipe/detail"));
 const PointagePage = lazy(() => import("@/pages/pointage/index"));
 const PlanningPersonnelPage = lazy(() => import("@/pages/planning-personnel/index"));
 const SousTraitantsPage = lazy(() => import("@/pages/sous-traitants/index"));
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="/situations" component={SituationsPage} />
         <Route path="/comptabilite" component={ComptabilitePage} />
         <Route path="/equipe" component={EquipePage} />
+        <Route path="/equipe/:id" component={EmployeeDetailPage} />
         <Route path="/pointage" component={PointagePage} />
         <Route path="/planning-personnel" component={PlanningPersonnelPage} />
         <Route path="/sous-traitants" component={SousTraitantsPage} />

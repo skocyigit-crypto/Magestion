@@ -20,7 +20,7 @@ function isCurrentMonth(dateIso: string): boolean {
 
 export default function ImportIaPage() {
   const [, navigate] = useLocation();
-  const { data: depenses } = useQuery({ queryKey: ["depenses"], queryFn: () => listDepenses() });
+  const { data: depenses, isError: depensesError } = useQuery({ queryKey: ["depenses"], queryFn: () => listDepenses() });
   const depensesCeMois = (depenses ?? []).filter((d) => isCurrentMonth(d.createdAt));
   const montantCeMois = depensesCeMois.reduce((sum, d) => sum + montantTtc(d.montantHt, d.tauxTva), 0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,6 +85,8 @@ export default function ImportIaPage() {
           Televersez une photo ou un scan de facture fournisseur : l'IA (Gemini) extrait automatiquement
           fournisseur, objet, montant HT, TVA et date d'echeance. Verifiez et corrigez avant de creer la depense.
         </p>
+
+        {depensesError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
 
         <div className="mb-6 grid grid-cols-2 gap-4">
           <Card>

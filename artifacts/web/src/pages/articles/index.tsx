@@ -21,7 +21,7 @@ const EMPTY_FORM: ArticleInput = { code: "", libelle: "", unite: "u", categorie:
 export default function ArticlesPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: articles, isLoading } = useQuery({
+  const { data: articles, isLoading, isError } = useQuery({
     queryKey: ["articles", showArchived],
     queryFn: () => listArticles(showArchived),
   });
@@ -112,6 +112,7 @@ export default function ArticlesPage() {
           className="mb-4 max-w-sm"
         />
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -144,7 +145,7 @@ export default function ArticlesPage() {
                   </td>
                 </tr>
               ))}
-              {!isLoading && filtered.length === 0 && (
+              {!isLoading && !isError && filtered.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucun article pour le moment.</td></tr>
               )}
             </tbody>

@@ -27,7 +27,7 @@ const STATUT_ORDER: VehicleStatut[] = ["DISPONIBLE", "EN_MISSION", "EN_MAINTENAN
 export default function VehiculesPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: vehicles, isLoading } = useQuery({
+  const { data: vehicles, isLoading, isError } = useQuery({
     queryKey: ["vehicles", showArchived],
     queryFn: () => listVehicles(showArchived),
   });
@@ -138,6 +138,7 @@ export default function VehiculesPage() {
           className="mb-4 max-w-sm"
         />
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -165,7 +166,7 @@ export default function VehiculesPage() {
               </CardContent>
             </Card>
           ))}
-          {!isLoading && filtered.length === 0 && <p className="text-muted-foreground">Aucun vehicule pour le moment.</p>}
+          {!isLoading && !isError && filtered.length === 0 && <p className="text-muted-foreground">Aucun vehicule pour le moment.</p>}
         </div>
       </div>
 

@@ -20,7 +20,7 @@ import { montantTtc, TAUX_TVA_OPTIONS, type TauxTva } from "@/lib/devis";
 export default function FactureDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const { data: facture, isLoading } = useQuery({ queryKey: ["factures", id], queryFn: () => getFacture(id) });
+  const { data: facture, isLoading, isError } = useQuery({ queryKey: ["factures", id], queryFn: () => getFacture(id) });
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [form, setForm] = useState<FactureUpdateInput>({});
@@ -74,6 +74,7 @@ export default function FactureDetailPage() {
   }
 
   if (isLoading) return <Layout><p className="p-8 text-muted-foreground">Chargement...</p></Layout>;
+  if (isError) return <Layout><p className="p-8 text-red-400">Erreur lors du chargement. Veuillez reessayer.</p></Layout>;
   if (!facture) return <Layout><p className="p-8 text-muted-foreground">Facture introuvable.</p></Layout>;
 
   const verrouillee = facture.statut !== "BROUILLON";

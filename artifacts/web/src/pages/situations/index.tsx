@@ -28,7 +28,7 @@ export default function SituationsPage() {
     if (!projectId && projects && projects.length > 0) setProjectId(projects[0].id);
   }, [projects, projectId]);
 
-  const { data: situations, isLoading } = useQuery({
+  const { data: situations, isLoading, isError } = useQuery({
     queryKey: ["situations", projectId],
     queryFn: () => listSituations(projectId),
     enabled: !!projectId,
@@ -137,6 +137,7 @@ export default function SituationsPage() {
           </Card>
         </div>
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -173,7 +174,7 @@ export default function SituationsPage() {
                   </td>
                 </tr>
               ))}
-              {!isLoading && all.length === 0 && (
+              {!isLoading && !isError && all.length === 0 && (
                 <tr><td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">Aucune situation pour ce chantier.</td></tr>
               )}
             </tbody>

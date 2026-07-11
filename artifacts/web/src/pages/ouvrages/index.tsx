@@ -22,7 +22,7 @@ const EMPTY_FORM = { code: "", libelle: "", unite: "u", coefficientK: 1.3 };
 export default function OuvragesPage() {
   const queryClient = useQueryClient();
   const [showArchived, setShowArchived] = useState(false);
-  const { data: ouvrages, isLoading } = useQuery({
+  const { data: ouvrages, isLoading, isError } = useQuery({
     queryKey: ["ouvrages", showArchived],
     queryFn: () => listOuvrages(showArchived),
   });
@@ -161,6 +161,7 @@ export default function OuvragesPage() {
           className="mb-4 max-w-sm"
         />
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -193,7 +194,7 @@ export default function OuvragesPage() {
                   </td>
                 </tr>
               ))}
-              {!isLoading && filtered.length === 0 && (
+              {!isLoading && !isError && filtered.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucun ouvrage pour le moment.</td></tr>
               )}
             </tbody>

@@ -7,7 +7,7 @@ import { PALIER_COLORS, PALIER_LABELS, listRelancesAFaire, logRelance } from "@/
 
 export default function RelancesPage() {
   const queryClient = useQueryClient();
-  const { data: aFaire, isLoading } = useQuery({ queryKey: ["relances", "a-faire"], queryFn: listRelancesAFaire });
+  const { data: aFaire, isLoading, isError } = useQuery({ queryKey: ["relances", "a-faire"], queryFn: listRelancesAFaire });
   const [notices, setNotices] = useState<Record<string, string>>({});
 
   const all = aFaire ?? [];
@@ -40,6 +40,7 @@ export default function RelancesPage() {
           </Card>
         </div>
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="flex flex-col gap-2">
@@ -59,7 +60,7 @@ export default function RelancesPage() {
               </div>
             </div>
           ))}
-          {!isLoading && all.length === 0 && <p className="text-muted-foreground">Aucun devis en attente de relance — tout est a jour.</p>}
+          {!isLoading && !isError && all.length === 0 && <p className="text-muted-foreground">Aucun devis en attente de relance — tout est a jour.</p>}
         </div>
       </div>
     </Layout>

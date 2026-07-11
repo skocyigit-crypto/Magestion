@@ -23,7 +23,7 @@ const ROLE_ORDER: UserRole[] = ["SUPER_ADMIN", "COMMERCIAL", "TERRAIN", "COMPTAB
 export default function UtilisateursPage() {
   const queryClient = useQueryClient();
   const currentUser = getUser();
-  const { data: users, isLoading } = useQuery({ queryKey: ["users"], queryFn: listUsers });
+  const { data: users, isLoading, isError } = useQuery({ queryKey: ["users"], queryFn: listUsers });
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState<UserInput>(EMPTY_FORM);
@@ -100,6 +100,7 @@ export default function UtilisateursPage() {
           className="mb-4 max-w-sm"
         />
 
+        {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
         {isLoading && <p className="text-muted-foreground">Chargement...</p>}
 
         <div className="flex flex-col gap-3">
@@ -141,7 +142,7 @@ export default function UtilisateursPage() {
               </Card>
             );
           })}
-          {!isLoading && filtered.length === 0 && <p className="text-muted-foreground">Aucun utilisateur pour le moment.</p>}
+          {!isLoading && !isError && filtered.length === 0 && <p className="text-muted-foreground">Aucun utilisateur pour le moment.</p>}
         </div>
       </div>
 

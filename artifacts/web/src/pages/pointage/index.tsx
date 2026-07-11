@@ -28,11 +28,11 @@ function formatHeure(iso: string | null): string {
 
 export default function PointagePage() {
   const queryClient = useQueryClient();
-  const { data: employees, isLoading: employeesLoading } = useQuery({ queryKey: ["employees"], queryFn: () => listEmployees() });
+  const { data: employees, isLoading: employeesLoading, isError: employeesError } = useQuery({ queryKey: ["employees"], queryFn: () => listEmployees() });
   // Le backend (routes/pointage.ts) retourne TOUTES les lignes sans filtre
   // `active` (pas de support onlyInactive) : le masquage des pointages
   // archives se fait donc cote client, voir visiblePointagesToday ci-dessous.
-  const { data: pointages, isLoading: pointagesLoading } = useQuery({ queryKey: ["pointage"], queryFn: listPointage });
+  const { data: pointages, isLoading: pointagesLoading, isError: pointagesError } = useQuery({ queryKey: ["pointage"], queryFn: listPointage });
 
   const [showArchived, setShowArchived] = useState(false);
 
@@ -119,6 +119,8 @@ export default function PointagePage() {
             <CardContent><p className="text-2xl font-semibold">{(employees ?? []).length}</p></CardContent>
           </Card>
         </div>
+
+        {(employeesError || pointagesError) && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
 
         <div className="flex flex-col gap-2">
           {(employees ?? []).map((emp) => {
