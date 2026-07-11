@@ -1,5 +1,19 @@
 import nodemailer, { type Transporter } from "nodemailer";
 
+// Les corps d'email sont construits par interpolation de champs utilisateur
+// (client, objet...) dans du HTML — sans echappement, un COMMERCIAL pourrait
+// injecter du markup (lien de phishing, etc.) envoye au nom de l'entreprise
+// a un vrai client externe. A utiliser sur TOUTE valeur utilisateur inseree
+// dans un template html d'email.
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export class EmailNotConfiguredError extends Error {
   constructor() {
     super("SMTP_HOST/SMTP_USER/SMTP_PASS non configures — envoi d'email indisponible");

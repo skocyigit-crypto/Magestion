@@ -6,7 +6,7 @@ import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
 import { recordFactureEmission } from "../lib/journalEntry.js";
 import { licenceToPdfInfo, renderDocumentPdfBuffer, streamDocumentPdf } from "../lib/pdf.js";
-import { EmailNotConfiguredError, sendMail } from "../lib/mail.js";
+import { EmailNotConfiguredError, escapeHtml, sendMail } from "../lib/mail.js";
 
 export const facturesRouter = Router();
 facturesRouter.use(requireModuleAccess("factures"));
@@ -202,7 +202,7 @@ facturesRouter.post("/:id/statut", async (req, res) => {
         await sendMail({
           to: updated.clientEmail,
           subject: `Facture ${updated.numero} — ${licence?.nom ?? ""}`,
-          html: `<p>Bonjour,</p><p>Veuillez trouver ci-joint notre facture <strong>${updated.numero}</strong> pour "${updated.objet}".</p><p>Cordialement.</p>`,
+          html: `<p>Bonjour,</p><p>Veuillez trouver ci-joint notre facture <strong>${updated.numero}</strong> pour "${escapeHtml(updated.objet)}".</p><p>Cordialement,<br/>${escapeHtml(licence?.nom ?? "")}</p>`,
           attachments: [{ filename: `facture-${updated.numero}.pdf`, content: pdfBuffer, contentType: "application/pdf" }],
         });
         res.json({ ...updated, emailSent: true });

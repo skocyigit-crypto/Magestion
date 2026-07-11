@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db, devisTable, licencesTable, relancesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
-import { EmailNotConfiguredError, sendMail } from "../lib/mail.js";
+import { EmailNotConfiguredError, escapeHtml, sendMail } from "../lib/mail.js";
 
 export const relancesRouter = Router();
 relancesRouter.use(requireModuleAccess("relances"));
@@ -109,7 +109,7 @@ relancesRouter.post("/", async (req, res) => {
       await sendMail({
         to: devis.clientEmail,
         subject: `Relance — Devis ${devis.numero} en attente de reponse`,
-        html: `<p>Bonjour,</p><p>Nous revenons vers vous concernant le devis <strong>${devis.numero}</strong> ("${devis.objet}") envoye le ${devis.dateEnvoi ? new Date(devis.dateEnvoi).toLocaleDateString("fr-FR") : ""}, reste sans reponse a ce jour.</p><p>N'hesitez pas a nous contacter pour toute question.</p><p>Cordialement,<br/>${licence?.nom ?? ""}</p>`,
+        html: `<p>Bonjour,</p><p>Nous revenons vers vous concernant le devis <strong>${devis.numero}</strong> ("${escapeHtml(devis.objet)}") envoye le ${devis.dateEnvoi ? new Date(devis.dateEnvoi).toLocaleDateString("fr-FR") : ""}, reste sans reponse a ce jour.</p><p>N'hesitez pas a nous contacter pour toute question.</p><p>Cordialement,<br/>${escapeHtml(licence?.nom ?? "")}</p>`,
       });
       res.status(201).json({ ...created, emailSent: true });
     } catch (err) {

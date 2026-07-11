@@ -6,7 +6,7 @@ import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
 import { nextNumero } from "../lib/numbering.js";
 import { licenceToPdfInfo, renderDocumentPdfBuffer, streamDocumentPdf } from "../lib/pdf.js";
-import { EmailNotConfiguredError, sendMail } from "../lib/mail.js";
+import { EmailNotConfiguredError, escapeHtml, sendMail } from "../lib/mail.js";
 
 export const devisRouter = Router();
 devisRouter.use(requireModuleAccess("devis"));
@@ -222,7 +222,7 @@ devisRouter.post("/:id/statut", async (req, res) => {
       await sendMail({
         to: updated.clientEmail,
         subject: `Devis ${updated.numero} — ${licence?.nom ?? ""}`,
-        html: `<p>Bonjour,</p><p>Veuillez trouver ci-joint notre devis <strong>${updated.numero}</strong> pour "${updated.objet}".</p><p>Cordialement.</p>`,
+        html: `<p>Bonjour,</p><p>Veuillez trouver ci-joint notre devis <strong>${updated.numero}</strong> pour "${escapeHtml(updated.objet)}".</p><p>Cordialement,<br/>${escapeHtml(licence?.nom ?? "")}</p>`,
         attachments: [{ filename: `devis-${updated.numero}.pdf`, content: pdfBuffer, contentType: "application/pdf" }],
       });
       res.json({ ...updated, emailSent: true });
