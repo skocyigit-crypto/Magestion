@@ -73,6 +73,22 @@ const LOGO_MIME_TO_EXT: Record<string, string> = {
   "image/webp": "webp",
 };
 
+const LOGO_EXT_TO_CONTENT_TYPE: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  webp: "image/webp",
+};
+
+// Le mimetype declare par le client (header multipart) est trivialement
+// falsifiable — on verifie les "magic bytes" reels du fichier pour confirmer
+// que le contenu correspond vraiment au type annonce avant de le stocker.
+function detectImageExt(buffer: Buffer): string | null {
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "png";
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "jpg";
+  if (buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP") return "webp";
+  return null;
+}
+
 const logoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 }, // 2 Mo
@@ -94,11 +110,16 @@ parametresRouter.post("/logo", logoUpload.single("logo"), async (req, res) => {
     return;
   }
 
+  const ext = detectImageExt(req.file.buffer);
+  if (!ext) {
+    res.status(400).json({ error: "Fichier invalide : le contenu ne correspond a aucun format image supporte (PNG, JPEG, WEBP)" });
+    return;
+  }
+
   const [existing] = await db.select().from(licencesTable).where(eq(licencesTable.id, licenceId)).limit(1);
 
   const dir = join(STORAGE_DIR, licenceId);
   mkdirSync(dir, { recursive: true });
-  const ext = LOGO_MIME_TO_EXT[req.file.mimetype];
   const filename = `logo-${randomUUID()}.${ext}`;
   const fullPath = join(dir, filename);
   await writeFile(fullPath, req.file.buffer);
@@ -132,5 +153,7 @@ parametresRouter.get("/logo", async (req, res) => {
     return;
   }
 
+  const ext = licence.logoChemin.split(".").pop() ?? "";
+  res.setHeader("Content-Type", LOGO_EXT_TO_CONTENT_TYPE[ext] ?? "application/octet-stream");
   res.sendFile(join(STORAGE_DIR, licence.logoChemin));
 });
