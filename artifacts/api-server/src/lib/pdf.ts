@@ -32,6 +32,15 @@ export function licenceToPdfInfo(licence: typeof licencesTable.$inferSelect | un
   };
 }
 
+export interface DocumentPdfLigne {
+  designation: string;
+  quantite: number;
+  unite: string;
+  prixUnitaireHt: number;
+  remisePercent: number;
+  montantHt: number;
+}
+
 interface DocumentPdfData {
   type: "DEVIS" | "FACTURE";
   numero: string;
@@ -42,6 +51,10 @@ interface DocumentPdfData {
   montantHt: number;
   tauxTva: number;
   licence: LicenceInfo;
+  // Si presentes, un tableau ligne par ligne remplace la ligne unique
+  // "objet" — retro-compatible avec les documents crees avant l'ajout des
+  // lignes (aucune ligne enregistree -> rendu inchange).
+  lignes?: DocumentPdfLigne[];
 }
 
 // Les polices standard PDF (Helvetica) ne supportent que WinAnsiEncoding : le
@@ -90,28 +103,59 @@ function drawDocument(doc: PDFKit.PDFDocument, data: DocumentPdfData) {
   doc.fontSize(11).font("Helvetica-Bold").text("Client");
   doc.fontSize(10).font("Helvetica").text(data.client);
 
-  // --- Tableau prestation ---
+  // --- Tableau prestation(s) ---
   doc.moveDown(1.5);
   const tableTop = doc.y;
-  const col = { objet: 50, ht: 300, tva: 380, ttc: 460 };
-  doc.fontSize(9).font("Helvetica-Bold");
-  doc.text("Designation", col.objet, tableTop);
-  doc.text("Montant HT", col.ht, tableTop, { width: 70, align: "right" });
-  doc.text("TVA", col.tva, tableTop, { width: 60, align: "right" });
-  doc.text("Montant TTC", col.ttc, tableTop, { width: 90, align: "right" });
-  doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+  let afterTableY: number;
 
-  const rowY = tableTop + 22;
-  doc.fontSize(10).font("Helvetica");
-  doc.text(data.objet, col.objet, rowY, { width: 240 });
-  doc.text(`${fmt(data.montantHt)} €`, col.ht, rowY, { width: 70, align: "right" });
-  doc.text(`${data.tauxTva} %`, col.tva, rowY, { width: 60, align: "right" });
-  doc.text(`${fmt(montantTtc)} €`, col.ttc, rowY, { width: 90, align: "right" });
+  if (data.lignes && data.lignes.length > 0) {
+    const col = { designation: 50, qte: 300, pu: 360, remise: 430, montant: 480 };
+    doc.fontSize(9).font("Helvetica-Bold");
+    doc.text("Designation", col.designation, tableTop);
+    doc.text("Qte", col.qte, tableTop, { width: 55, align: "right" });
+    doc.text("PU HT", col.pu, tableTop, { width: 65, align: "right" });
+    doc.text("Remise", col.remise, tableTop, { width: 45, align: "right" });
+    doc.text("Montant HT", col.montant, tableTop, { width: 70, align: "right" });
+    doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
 
-  doc.moveTo(50, rowY + 30).lineTo(550, rowY + 30).stroke();
+    let y = tableTop + 22;
+    doc.fontSize(9).font("Helvetica");
+    for (const l of data.lignes) {
+      if (y > 700) {
+        doc.addPage();
+        y = 50;
+      }
+      doc.text(l.designation, col.designation, y, { width: 245 });
+      doc.text(`${fmt(l.quantite)} ${l.unite}`, col.qte, y, { width: 55, align: "right" });
+      doc.text(`${fmt(l.prixUnitaireHt)} €`, col.pu, y, { width: 65, align: "right" });
+      doc.text(l.remisePercent > 0 ? `${fmt(l.remisePercent)} %` : "—", col.remise, y, { width: 45, align: "right" });
+      doc.text(`${fmt(l.montantHt)} €`, col.montant, y, { width: 70, align: "right" });
+      y += 18;
+    }
+    doc.moveTo(50, y + 5).lineTo(550, y + 5).stroke();
+    afterTableY = y + 20;
+  } else {
+    const col = { objet: 50, ht: 300, tva: 380, ttc: 460 };
+    doc.fontSize(9).font("Helvetica-Bold");
+    doc.text("Designation", col.objet, tableTop);
+    doc.text("Montant HT", col.ht, tableTop, { width: 70, align: "right" });
+    doc.text("TVA", col.tva, tableTop, { width: 60, align: "right" });
+    doc.text("Montant TTC", col.ttc, tableTop, { width: 90, align: "right" });
+    doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+
+    const rowY = tableTop + 22;
+    doc.fontSize(10).font("Helvetica");
+    doc.text(data.objet, col.objet, rowY, { width: 240 });
+    doc.text(`${fmt(data.montantHt)} €`, col.ht, rowY, { width: 70, align: "right" });
+    doc.text(`${data.tauxTva} %`, col.tva, rowY, { width: 60, align: "right" });
+    doc.text(`${fmt(montantTtc)} €`, col.ttc, rowY, { width: 90, align: "right" });
+
+    doc.moveTo(50, rowY + 30).lineTo(550, rowY + 30).stroke();
+    afterTableY = rowY + 45;
+  }
 
   // --- Totaux ---
-  let totalsY = rowY + 45;
+  let totalsY = afterTableY;
   doc.fontSize(10).font("Helvetica");
   doc.text("Total HT :", 380, totalsY, { width: 80, align: "right" });
   doc.text(`${fmt(data.montantHt)} €`, 460, totalsY, { width: 90, align: "right" });

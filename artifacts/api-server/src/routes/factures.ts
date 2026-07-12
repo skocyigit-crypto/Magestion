@@ -1,14 +1,16 @@
 import { Router } from "express";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { db, facturesTable, licencesTable } from "@magestion/db";
+import { db, facturesTable, factureLignesTable, licencesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
 import { recordFactureEmission } from "../lib/journalEntry.js";
-import { licenceToPdfInfo, renderDocumentPdfBuffer, streamDocumentPdf } from "../lib/pdf.js";
+import { licenceToPdfInfo, renderDocumentPdfBuffer, streamDocumentPdf, type DocumentPdfLigne } from "../lib/pdf.js";
 import { EmailNotConfiguredError, escapeHtml, sendMail } from "../lib/mail.js";
-import { generateFacturxXml, validateFacturxInvoice, type FacturxInvoiceInput } from "../lib/facturx-xml.js";
+import { generateFacturxXml, validateFacturxInvoice, type FacturxInvoiceInput, type FacturxLigne } from "../lib/facturx-xml.js";
 import { getPdpConnector } from "../lib/pdp.js";
+import { getLicencePdpLegalEntityId } from "../lib/pdp-legal-entity.js";
+import { ligneInputSchema, ligneMontantHt, totalLignesHt, type LigneInput } from "../lib/lignes.js";
 
 export const facturesRouter = Router();
 facturesRouter.use(requireModuleAccess("factures"));
@@ -59,6 +61,98 @@ function toFacturxInput(
     },
   };
 }
+
+async function toPdfLignes(factureId: string): Promise<DocumentPdfLigne[] | undefined> {
+  const rows = await db.select().from(factureLignesTable).where(eq(factureLignesTable.factureId, factureId));
+  if (rows.length === 0) return undefined;
+  return rows
+    .sort((a, b) => a.ordre - b.ordre)
+    .map((r) => {
+      const l: LigneInput = { designation: r.designation, quantite: Number(r.quantite), unite: r.unite, prixUnitaireHt: Number(r.prixUnitaireHt), remisePercent: Number(r.remisePercent) };
+      return { designation: l.designation, quantite: l.quantite, unite: r.unite, prixUnitaireHt: l.prixUnitaireHt, remisePercent: Number(r.remisePercent), montantHt: ligneMontantHt(l) };
+    });
+}
+
+async function toFacturxLignes(factureId: string): Promise<FacturxLigne[] | undefined> {
+  const rows = await db.select().from(factureLignesTable).where(eq(factureLignesTable.factureId, factureId));
+  if (rows.length === 0) return undefined;
+  return rows
+    .sort((a, b) => a.ordre - b.ordre)
+    .map((r) => {
+      const l: LigneInput = { designation: r.designation, quantite: Number(r.quantite), unite: r.unite, prixUnitaireHt: Number(r.prixUnitaireHt), remisePercent: Number(r.remisePercent) };
+      return { designation: r.designation, quantite: l.quantite, unite: r.unite, prixUnitaireHt: l.prixUnitaireHt, montantHt: ligneMontantHt(l) };
+    });
+}
+
+facturesRouter.get("/:id/lignes", async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  const [facture] = await db
+    .select()
+    .from(facturesTable)
+    .where(and(eq(facturesTable.id, req.params.id), eq(facturesTable.licenceId, licenceId)))
+    .limit(1);
+  if (!facture) {
+    res.status(404).json({ error: "Facture introuvable" });
+    return;
+  }
+
+  const lignes = await db.select().from(factureLignesTable).where(eq(factureLignesTable.factureId, facture.id));
+  res.json(lignes.sort((a, b) => a.ordre - b.ordre));
+});
+
+// Meme logique que PUT /devis/:id/lignes : remplacement complet, reserve aux
+// factures BROUILLON (le contenu est verrouille des l'emission). Le DELETE
+// porte sur des sous-lignes d'un brouillon encore editable, pas sur la
+// facture elle-meme (jamais supprimee).
+facturesRouter.put("/:id/lignes", async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  const parsed = z.object({ lignes: z.array(ligneInputSchema).min(1).max(200) }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Requete invalide", details: parsed.error.flatten() });
+    return;
+  }
+
+  const [facture] = await db
+    .select()
+    .from(facturesTable)
+    .where(and(eq(facturesTable.id, req.params.id), eq(facturesTable.licenceId, licenceId)))
+    .limit(1);
+  if (!facture) {
+    res.status(404).json({ error: "Facture introuvable" });
+    return;
+  }
+  if (facture.statut !== "BROUILLON") {
+    res.status(423).json({ error: "Facture verrouillee (deja emise) — les lignes ne sont plus modifiables" });
+    return;
+  }
+
+  await db.delete(factureLignesTable).where(eq(factureLignesTable.factureId, facture.id));
+  const inserted = await db
+    .insert(factureLignesTable)
+    .values(parsed.data.lignes.map((l, i) => ({
+      factureId: facture.id,
+      ordre: i,
+      designation: l.designation,
+      quantite: l.quantite.toString(),
+      unite: l.unite ?? "u",
+      prixUnitaireHt: l.prixUnitaireHt.toString(),
+      remisePercent: (l.remisePercent ?? 0).toString(),
+    })))
+    .returning();
+
+  const montantHt = totalLignesHt(parsed.data.lignes);
+  const [updatedFacture] = await db
+    .update(facturesTable)
+    .set({ montantHt: montantHt.toString(), updatedAt: new Date() })
+    .where(eq(facturesTable.id, facture.id))
+    .returning();
+
+  res.json({ facture: updatedFacture, lignes: inserted.sort((a, b) => a.ordre - b.ordre) });
+});
 
 facturesRouter.get("/", async (req, res) => {
   const licenceId = requireLicenceId(req.user!, res);
@@ -116,6 +210,7 @@ facturesRouter.get("/:id/pdf", async (req, res) => {
     montantHt: Number(facture.montantHt),
     tauxTva: Number(facture.tauxTva),
     licence: licenceToPdfInfo(licence),
+    lignes: await toPdfLignes(facture.id),
   });
 });
 
@@ -247,6 +342,7 @@ facturesRouter.post("/:id/statut", async (req, res) => {
           montantHt: Number(updated.montantHt),
           tauxTva: Number(updated.tauxTva),
           licence: licenceToPdfInfo(licence),
+          lignes: await toPdfLignes(updated.id),
         });
         await sendMail({
           to: updated.clientEmail,
@@ -285,7 +381,7 @@ facturesRouter.get("/:id/facturx-xml", async (req, res) => {
   }
 
   const [licence] = await db.select().from(licencesTable).where(eq(licencesTable.id, licenceId)).limit(1);
-  const xml = generateFacturxXml(toFacturxInput(facture, licence));
+  const xml = generateFacturxXml({ ...toFacturxInput(facture, licence), lignes: await toFacturxLignes(facture.id) });
 
   res.setHeader("Content-Type", "application/xml; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="facturx-${facture.numero}.xml"`);
@@ -315,7 +411,7 @@ facturesRouter.post("/:id/transmettre-pdp", async (req, res) => {
   }
 
   const [licence] = await db.select().from(licencesTable).where(eq(licencesTable.id, licenceId)).limit(1);
-  const input = toFacturxInput(facture, licence);
+  const input = { ...toFacturxInput(facture, licence), lignes: await toFacturxLignes(facture.id) };
   const errors = validateFacturxInvoice(input);
   if (errors.length > 0) {
     res.status(400).json({ error: "Donnees insuffisantes pour la facturation electronique", details: errors });
@@ -326,12 +422,14 @@ facturesRouter.post("/:id/transmettre-pdp", async (req, res) => {
   const connector = getPdpConnector();
 
   try {
+    const legalEntityId = await getLicencePdpLegalEntityId(licenceId);
     const result = await connector.transmit({
       numero: facture.numero,
       xml,
       clientNom: facture.client,
+      clientSiret: facture.clientSiret,
       montantTtc: Number(facture.montantHt) * (1 + Number(facture.tauxTva) / 100),
-    });
+    }, legalEntityId);
     const [updated] = await db
       .update(facturesTable)
       .set({

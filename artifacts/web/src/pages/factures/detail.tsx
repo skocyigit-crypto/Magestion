@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
@@ -14,17 +14,21 @@ import {
   downloadFacturePdf,
   downloadFacturxXml,
   getFacture,
+  listFactureLignes,
   rafraichirStatutPdp,
+  saveFactureLignes,
   transmettrePdp,
   updateFacture,
   type FactureUpdateInput,
 } from "@/lib/factures";
-import { montantTtc, TAUX_TVA_OPTIONS, type TauxTva } from "@/lib/devis";
+import { montantTtc, TAUX_TVA_OPTIONS, type LigneInput, type TauxTva } from "@/lib/devis";
+import { LigneEditor } from "@/components/ligne-editor";
 
 export default function FactureDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { data: facture, isLoading, isError } = useQuery({ queryKey: ["factures", id], queryFn: () => getFacture(id) });
+  const { data: lignes } = useQuery({ queryKey: ["factures", id, "lignes"], queryFn: () => listFactureLignes(id) });
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [form, setForm] = useState<FactureUpdateInput>({});
@@ -33,6 +37,34 @@ export default function FactureDetailPage() {
   const [sendNotice, setSendNotice] = useState<string | null>(null);
   const [pdpBusy, setPdpBusy] = useState(false);
   const [pdpError, setPdpError] = useState<string | null>(null);
+
+  const [editLignes, setEditLignes] = useState<LigneInput[]>([]);
+  const [lignesSaving, setLignesSaving] = useState(false);
+  const [lignesError, setLignesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (lignes && editLignes.length === 0) setEditLignes(lignes.map((l) => ({ ...l })));
+  }, [lignes]);
+
+  async function handleSaveLignes() {
+    const valides = editLignes.filter((l) => l.designation.trim() && l.quantite > 0);
+    if (valides.length === 0) {
+      setLignesError("Ajoutez au moins une ligne avec une designation");
+      return;
+    }
+    setLignesSaving(true);
+    setLignesError(null);
+    try {
+      await saveFactureLignes(id, valides);
+      await queryClient.invalidateQueries({ queryKey: ["factures", id] });
+      await queryClient.invalidateQueries({ queryKey: ["factures", id, "lignes"] });
+      await queryClient.invalidateQueries({ queryKey: ["factures"] });
+    } catch (err) {
+      setLignesError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement des lignes");
+    } finally {
+      setLignesSaving(false);
+    }
+  }
 
   function openEdit() {
     if (!facture) return;
@@ -169,6 +201,19 @@ export default function FactureDetailPage() {
             Generee depuis le devis <a href={`/devis/${facture.devisId}`} className="text-primary hover:underline">associe</a>.
           </p>
         )}
+
+        <Card className="mt-6">
+          <CardHeader><CardTitle>Lignes</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <LigneEditor lignes={editLignes} onChange={setEditLignes} disabled={verrouillee} />
+            {!verrouillee && (
+              <div className="flex items-center gap-3">
+                <Button size="sm" onClick={handleSaveLignes} disabled={lignesSaving}>{lignesSaving ? "Enregistrement..." : "Enregistrer les lignes"}</Button>
+                {lignesError && <p className="text-sm text-red-400">{lignesError}</p>}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card className="mt-6">
           <CardHeader><CardTitle>Facturation electronique (Factur-X / PDP)</CardTitle></CardHeader>

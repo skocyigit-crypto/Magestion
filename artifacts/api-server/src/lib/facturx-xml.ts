@@ -16,6 +16,14 @@ export interface FacturxParty {
   pays?: string | null;
 }
 
+export interface FacturxLigne {
+  designation: string;
+  quantite: number;
+  unite: string;
+  prixUnitaireHt: number;
+  montantHt: number;
+}
+
 export interface FacturxInvoiceInput {
   numero: string;
   dateEmission: Date | string;
@@ -25,6 +33,10 @@ export interface FacturxInvoiceInput {
   tauxTva: number;
   vendeur: FacturxParty;
   acheteur: FacturxParty;
+  // Si presentes, une ligne XML par element — toutes partagent tauxTva (une
+  // seule ventilation de TVA, voir lib/db/src/schema/lignes.ts). Sans lignes
+  // (documents anterieurs a leur ajout), une ligne unique = objet/montantHt.
+  lignes?: FacturxLigne[];
 }
 
 function esc(s: unknown): string {
@@ -86,6 +98,37 @@ export function generateFacturxXml(inv: FacturxInvoiceInput): string {
   const grandTotal = round2(basis + taxAmount);
   const category = rate === 0 ? "Z" : "S";
 
+  const lignes: FacturxLigne[] = inv.lignes && inv.lignes.length > 0
+    ? inv.lignes
+    : [{ designation: inv.objet, quantite: 1, unite: "C62", prixUnitaireHt: inv.montantHt, montantHt: inv.montantHt }];
+
+  const lignesXml = lignes.map((l, i) => `    <ram:IncludedSupplyChainTradeLineItem>
+      <ram:AssociatedDocumentLineDocument>
+        <ram:LineID>${i + 1}</ram:LineID>
+      </ram:AssociatedDocumentLineDocument>
+      <ram:SpecifiedTradeProduct>
+        <ram:Name>${esc(l.designation)}</ram:Name>
+      </ram:SpecifiedTradeProduct>
+      <ram:SpecifiedLineTradeAgreement>
+        <ram:NetPriceProductTradePrice>
+          <ram:ChargeAmount>${fmtNum(l.prixUnitaireHt)}</ram:ChargeAmount>
+        </ram:NetPriceProductTradePrice>
+      </ram:SpecifiedLineTradeAgreement>
+      <ram:SpecifiedLineTradeDelivery>
+        <ram:BilledQuantity unitCode="${esc(l.unite || "C62")}">${fmtNum(l.quantite)}</ram:BilledQuantity>
+      </ram:SpecifiedLineTradeDelivery>
+      <ram:SpecifiedLineTradeSettlement>
+        <ram:ApplicableTradeTax>
+          <ram:TypeCode>VAT</ram:TypeCode>
+          <ram:CategoryCode>${esc(category)}</ram:CategoryCode>
+          <ram:RateApplicablePercent>${fmtNum(rate)}</ram:RateApplicablePercent>
+        </ram:ApplicableTradeTax>
+        <ram:SpecifiedTradeSettlementLineMonetarySummation>
+          <ram:LineTotalAmount>${fmtNum(l.montantHt)}</ram:LineTotalAmount>
+        </ram:SpecifiedTradeSettlementLineMonetarySummation>
+      </ram:SpecifiedLineTradeSettlement>
+    </ram:IncludedSupplyChainTradeLineItem>`).join("\n");
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rsm:CrossIndustryInvoice
   xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"
@@ -107,32 +150,7 @@ export function generateFacturxXml(inv: FacturxInvoiceInput): string {
     </ram:IssueDateTime>
   </rsm:ExchangedDocument>
   <rsm:SupplyChainTradeTransaction>
-    <ram:IncludedSupplyChainTradeLineItem>
-      <ram:AssociatedDocumentLineDocument>
-        <ram:LineID>1</ram:LineID>
-      </ram:AssociatedDocumentLineDocument>
-      <ram:SpecifiedTradeProduct>
-        <ram:Name>${esc(inv.objet)}</ram:Name>
-      </ram:SpecifiedTradeProduct>
-      <ram:SpecifiedLineTradeAgreement>
-        <ram:NetPriceProductTradePrice>
-          <ram:ChargeAmount>${fmtNum(inv.montantHt)}</ram:ChargeAmount>
-        </ram:NetPriceProductTradePrice>
-      </ram:SpecifiedLineTradeAgreement>
-      <ram:SpecifiedLineTradeDelivery>
-        <ram:BilledQuantity unitCode="C62">1.00</ram:BilledQuantity>
-      </ram:SpecifiedLineTradeDelivery>
-      <ram:SpecifiedLineTradeSettlement>
-        <ram:ApplicableTradeTax>
-          <ram:TypeCode>VAT</ram:TypeCode>
-          <ram:CategoryCode>${esc(category)}</ram:CategoryCode>
-          <ram:RateApplicablePercent>${fmtNum(rate)}</ram:RateApplicablePercent>
-        </ram:ApplicableTradeTax>
-        <ram:SpecifiedTradeSettlementLineMonetarySummation>
-          <ram:LineTotalAmount>${fmtNum(inv.montantHt)}</ram:LineTotalAmount>
-        </ram:SpecifiedTradeSettlementLineMonetarySummation>
-      </ram:SpecifiedLineTradeSettlement>
-    </ram:IncludedSupplyChainTradeLineItem>
+${lignesXml}
     <ram:ApplicableHeaderTradeAgreement>
 ${partyXml("SellerTradeParty", inv.vendeur)}
 ${partyXml("BuyerTradeParty", inv.acheteur)}

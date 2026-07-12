@@ -1,4 +1,5 @@
 import { apiFetch, downloadFile } from "@/lib/api";
+import type { Ligne, LigneInput } from "@/lib/devis";
 
 export type FactureStatut = "BROUILLON" | "ENVOYEE" | "PAYEE" | "EN_RETARD";
 
@@ -78,6 +79,15 @@ export function updateFacture(id: string, input: FactureUpdateInput) {
 
 export function downloadFacturePdf(id: string, numero: string) {
   return downloadFile(`/factures/${id}/pdf`, `facture-${numero}.pdf`);
+}
+
+export function listFactureLignes(id: string) {
+  return apiFetch<Ligne[]>(`/factures/${id}/lignes`);
+}
+
+// Remplace l'integralite des lignes — refuse (423) une fois la facture hors BROUILLON.
+export function saveFactureLignes(id: string, lignes: LigneInput[]) {
+  return apiFetch<{ facture: Facture; lignes: Ligne[] }>(`/factures/${id}/lignes`, { method: "PUT", body: JSON.stringify({ lignes }) });
 }
 
 export function downloadFacturxXml(id: string, numero: string) {
