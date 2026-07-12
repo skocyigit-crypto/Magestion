@@ -2,6 +2,9 @@ import "./env.js";
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
 import { authLimiter, aiLimiter } from "./lib/rateLimit.js";
@@ -53,8 +56,34 @@ const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "http://localhost:5173").split(",");
 
-app.use(helmet());
+// CSP adaptee a un front Vite servi en same-origin (build sans nonce,
+// scripts/styles en fichiers externes /assets/*) + attributs style inline
+// React (ex: barres de progression Gantt) — 'unsafe-inline' limite a
+// style-src uniquement, script-src reste strict.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "script-src": ["'self'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "img-src": ["'self'", "data:", "blob:"],
+        "connect-src": ["'self'"],
+      },
+    },
+  }),
+);
 app.use(cors({ origin: allowedOrigins, credentials: true }));
+
+// Sert le front (build Vite statique) depuis le MEME conteneur/origine que
+// l'API — evite tout probleme CORS en production et un second service a
+// deployer. Absent en dev (le front tourne alors sur son propre serveur Vite,
+// voir README) : le dossier n'existe que si `pnpm --filter @magestion/web run build` a tourne.
+const WEB_DIST = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "web", "dist");
+const SERVE_WEB = existsSync(WEB_DIST);
+if (SERVE_WEB) {
+  app.use(express.static(WEB_DIST));
+}
 
 // Corps BRUT requis pour la verification de signature Stripe (HMAC sur les
 // octets exacts recus) — DOIT etre monte avant express.json() ci-dessous,
@@ -112,6 +141,16 @@ app.use("/api/super-admin", superAdminRouter);
 app.use("/api/taches", tachesRouter);
 app.use("/api/cloture-comptable", clotureComptableRouter);
 app.use("/api/immobilisations", immobilisationsRouter);
+
+// Fallback SPA : toute route non-/api sans fichier statique correspondant
+// (ex: /chantiers/abc-123, rafraichie directement) renvoie index.html —
+// wouter prend ensuite le relais cote client. Les /api/* non matches restent
+// en 404 JSON (jamais de page HTML pour un appel API).
+if (SERVE_WEB) {
+  app.get(/^(?!\/api).*/, (_req, res) => {
+    res.sendFile(join(WEB_DIST, "index.html"));
+  });
+}
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Route introuvable" });
