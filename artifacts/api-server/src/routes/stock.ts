@@ -12,8 +12,8 @@ const stockItemInputSchema = z.object({
   nom: z.string().min(1).max(200),
   categorie: z.string().max(100).optional(),
   unite: z.string().min(1).max(20).optional(),
-  seuilAlerte: z.number().nonnegative().optional(),
-  prixUnitaireHt: z.number().nonnegative().optional(),
+  seuilAlerte: z.number().nonnegative().max(99999999.99).optional(),
+  prixUnitaireHt: z.number().nonnegative().max(99999999.99).optional(),
 });
 
 stockRouter.get("/", async (req, res) => {
@@ -91,7 +91,7 @@ stockRouter.patch("/:id", async (req, res) => {
 
 const mouvementInputSchema = z.object({
   type: z.enum(["ENTREE", "SORTIE"]),
-  quantite: z.number().positive(),
+  quantite: z.number().positive().max(99999999.99),
   motif: z.string().max(500).optional(),
   projectId: z.string().uuid().optional(),
 });
@@ -106,20 +106,35 @@ stockRouter.post("/:id/mouvements", async (req, res) => {
     return;
   }
 
-  const [item] = await db
-    .select()
-    .from(stockItemsTable)
-    .where(and(eq(stockItemsTable.id, req.params.id), eq(stockItemsTable.licenceId, licenceId)))
-    .limit(1);
-  if (!item) {
-    res.status(404).json({ error: "Article de stock introuvable" });
-    return;
-  }
-
   const delta = parsed.data.type === "ENTREE" ? parsed.data.quantite : -parsed.data.quantite;
-  const nouvelleQuantite = Number(item.quantiteActuelle) + delta;
-  if (nouvelleQuantite < 0) {
-    res.status(409).json({ error: "Stock insuffisant pour cette sortie" });
+
+  // Update conditionnel et atomique : la condition de non-negativite est
+  // verifiee par la base au moment meme de l'ecriture (WHERE), pas sur une
+  // lecture prealable — deux sorties concurrentes ne peuvent plus toutes les
+  // deux lire un stock suffisant puis faire passer la quantite en negatif.
+  const [item] = await db
+    .update(stockItemsTable)
+    .set({ quantiteActuelle: sql`${stockItemsTable.quantiteActuelle} + ${delta}`, updatedAt: new Date() })
+    .where(
+      and(
+        eq(stockItemsTable.id, req.params.id),
+        eq(stockItemsTable.licenceId, licenceId),
+        sql`${stockItemsTable.quantiteActuelle} + ${delta} >= 0`,
+      ),
+    )
+    .returning();
+
+  if (!item) {
+    const [exists] = await db
+      .select({ id: stockItemsTable.id })
+      .from(stockItemsTable)
+      .where(and(eq(stockItemsTable.id, req.params.id), eq(stockItemsTable.licenceId, licenceId)))
+      .limit(1);
+    if (!exists) {
+      res.status(404).json({ error: "Article de stock introuvable" });
+    } else {
+      res.status(409).json({ error: "Stock insuffisant pour cette sortie" });
+    }
     return;
   }
 
@@ -134,11 +149,6 @@ stockRouter.post("/:id/mouvements", async (req, res) => {
       motif: parsed.data.motif,
     })
     .returning();
-
-  await db
-    .update(stockItemsTable)
-    .set({ quantiteActuelle: sql`${stockItemsTable.quantiteActuelle} + ${delta}`, updatedAt: new Date() })
-    .where(eq(stockItemsTable.id, item.id));
 
   res.status(201).json(movement);
 });

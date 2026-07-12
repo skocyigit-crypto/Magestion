@@ -16,3 +16,30 @@ export async function nextNumero(tableName: "devis" | "factures", prefix: string
   const count = Number(rows[0]?.count ?? 0);
   return `${prefix}-${year}-${String(count + 1).padStart(3, "0")}`;
 }
+
+// nextNumero() n'est pas verrouille : deux requetes concurrentes peuvent lire
+// le meme COUNT et calculer le meme numero. Plutot qu'un verrou (complexite
+// transactionnelle cross-driver pg/pglite), on s'appuie sur l'index unique
+// (licence_id, numero) en base (migration 0016) : en cas de collision reelle,
+// l'insert leve une violation 23505 qu'on rattrape ici en retentant avec un
+// numero frais — la course devient invisible pour l'utilisateur au lieu de
+// produire silencieusement un doublon (obligation legale de continuite de
+// numerotation des devis/factures).
+export async function withNumero<T>(
+  tableName: "devis" | "factures",
+  prefix: string,
+  licenceId: string,
+  insert: (numero: string) => Promise<T>,
+): Promise<T> {
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const numero = await nextNumero(tableName, prefix, licenceId);
+    try {
+      return await insert(numero);
+    } catch (err) {
+      const code = (err as { code?: string } | null)?.code;
+      if (code !== "23505" || attempt === MAX_ATTEMPTS) throw err;
+    }
+  }
+  throw new Error("Impossible de generer un numero unique apres plusieurs tentatives");
+}

@@ -23,7 +23,7 @@ const employeeInputSchema = z.object({
   role: ROLE_ENUM.optional(),
   telephone: z.string().max(30).optional(),
   email: z.string().email().optional().or(z.literal("")),
-  tauxHoraire: z.number().nonnegative().optional(),
+  tauxHoraire: z.number().nonnegative().max(999999.99).optional(),
 });
 
 const employeeUpdateSchema = employeeInputSchema.partial().extend({

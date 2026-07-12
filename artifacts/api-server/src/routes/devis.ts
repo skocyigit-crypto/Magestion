@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db, devisTable, facturesTable, licencesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
-import { nextNumero } from "../lib/numbering.js";
+import { withNumero } from "../lib/numbering.js";
 import { licenceToPdfInfo, renderDocumentPdfBuffer, streamDocumentPdf } from "../lib/pdf.js";
 import { EmailNotConfiguredError, escapeHtml, sendMail } from "../lib/mail.js";
 
@@ -16,7 +16,7 @@ const devisInputSchema = z.object({
   clientEmail: z.string().email().optional().or(z.literal("")),
   objet: z.string().min(1).max(500),
   projectId: z.string().uuid().optional(),
-  montantHt: z.number().nonnegative(),
+  montantHt: z.number().nonnegative().max(9999999999.99),
   tauxTva: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]),
 });
 
@@ -47,21 +47,22 @@ devisRouter.post("/", async (req, res) => {
     return;
   }
 
-  const numero = await nextNumero("devis", "DEV", licenceId);
-
-  const [created] = await db
-    .insert(devisTable)
-    .values({
-      licenceId,
-      numero,
-      client: parsed.data.client,
-      clientEmail: parsed.data.clientEmail || undefined,
-      objet: parsed.data.objet,
-      projectId: parsed.data.projectId,
-      montantHt: parsed.data.montantHt.toString(),
-      tauxTva: parsed.data.tauxTva.toString(),
-    })
-    .returning();
+  const created = await withNumero("devis", "DEV", licenceId, async (numero) => {
+    const [row] = await db
+      .insert(devisTable)
+      .values({
+        licenceId,
+        numero,
+        client: parsed.data.client,
+        clientEmail: parsed.data.clientEmail || undefined,
+        objet: parsed.data.objet,
+        projectId: parsed.data.projectId,
+        montantHt: parsed.data.montantHt.toString(),
+        tauxTva: parsed.data.tauxTva.toString(),
+      })
+      .returning();
+    return row;
+  });
 
   res.status(201).json(created);
 });
@@ -263,21 +264,23 @@ devisRouter.post("/:id/convertir-facture", async (req, res) => {
     return;
   }
 
-  const numero = await nextNumero("factures", "FAC", licenceId);
-  const [facture] = await db
-    .insert(facturesTable)
-    .values({
-      licenceId,
-      projectId: devis.projectId,
-      devisId: devis.id,
-      numero,
-      client: devis.client,
-      clientEmail: devis.clientEmail,
-      objet: devis.objet,
-      montantHt: devis.montantHt,
-      tauxTva: devis.tauxTva,
-    })
-    .returning();
+  const facture = await withNumero("factures", "FAC", licenceId, async (numero) => {
+    const [row] = await db
+      .insert(facturesTable)
+      .values({
+        licenceId,
+        projectId: devis.projectId,
+        devisId: devis.id,
+        numero,
+        client: devis.client,
+        clientEmail: devis.clientEmail,
+        objet: devis.objet,
+        montantHt: devis.montantHt,
+        tauxTva: devis.tauxTva,
+      })
+      .returning();
+    return row;
+  });
 
   res.status(201).json(facture);
 });
