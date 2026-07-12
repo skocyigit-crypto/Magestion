@@ -20,6 +20,9 @@ ENV NODE_ENV=production
 ENV PORT=8080
 EXPOSE 8080
 
-# Migrations idempotentes (CREATE TABLE IF NOT EXISTS / DO $$ ... EXCEPTION
-# duplicate_object) — sures a rejouer a chaque demarrage de conteneur.
-CMD ["sh", "-c", "pnpm --filter @magestion/db run migrate && pnpm --filter @magestion/api-server run prod"]
+# Migrations NON lancees au demarrage du conteneur (garde-fou volontaire dans
+# migrate.ts : refuse de tourner en NODE_ENV=production sans
+# ALLOW_PROD_MIGRATIONS=1 explicite — evite un crash-loop silencieux si une
+# migration echoue au boot). A appliquer manuellement avant chaque deploiement
+# qui en introduit de nouvelles : DATABASE_URL=... pnpm --filter @magestion/db run migrate
+CMD ["pnpm", "--filter", "@magestion/api-server", "run", "prod"]
