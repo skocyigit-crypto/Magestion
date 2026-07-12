@@ -1,12 +1,27 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ROLE_LABELS, STATUT_LABELS, getEmployee } from "@/lib/employees";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  HABILITATION_TYPE_LABELS,
+  ROLE_LABELS,
+  STATUT_LABELS,
+  archiverHabilitation,
+  createEmployeeHabilitation,
+  getEmployee,
+  listEmployeeHabilitations,
+  type HabilitationInput,
+  type HabilitationType,
+} from "@/lib/employees";
 import { listPointage } from "@/lib/pointage";
 import { TYPE_LABELS, listAffectations, startOfWeek, toDateStr } from "@/lib/planningPersonnel";
 import { listProjects } from "@/lib/projects";
+
+const EMPTY_HABILITATION: HabilitationInput = { type: "CACES", dateValidite: "" };
 
 function formatHeure(iso: string | null): string {
   if (!iso) return "—";
@@ -18,9 +33,28 @@ function formatDate(iso: string): string {
 
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
   const { data: employee, isLoading, isError } = useQuery({ queryKey: ["employees", id], queryFn: () => getEmployee(id) });
   const { data: pointages } = useQuery({ queryKey: ["pointage"], queryFn: listPointage });
   const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
+  const { data: habilitations } = useQuery({ queryKey: ["employees", id, "habilitations"], queryFn: () => listEmployeeHabilitations(id) });
+
+  const [habForm, setHabForm] = useState<HabilitationInput>(EMPTY_HABILITATION);
+
+  async function handleAjouterHabilitation(e: React.FormEvent) {
+    e.preventDefault();
+    if (!habForm.dateValidite) return;
+    await createEmployeeHabilitation(id, habForm);
+    setHabForm(EMPTY_HABILITATION);
+    await queryClient.invalidateQueries({ queryKey: ["employees", id, "habilitations"] });
+    await queryClient.invalidateQueries({ queryKey: ["employees", "echeances"] });
+  }
+
+  async function handleArchiverHabilitation(habId: string) {
+    await archiverHabilitation(habId);
+    await queryClient.invalidateQueries({ queryKey: ["employees", id, "habilitations"] });
+    await queryClient.invalidateQueries({ queryKey: ["employees", "echeances"] });
+  }
 
   // Planning : 2 semaines passees a 2 semaines a venir, assez pour donner du
   // contexte sans devoir paginer.
@@ -114,6 +148,53 @@ export default function EmployeeDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="mt-6">
+          <CardHeader><CardTitle>Documents et certifications (RH)</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              {(habilitations ?? []).map((h) => {
+                const joursRestants = Math.floor((new Date(h.dateValidite).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                const alerte = joursRestants <= 30;
+                return (
+                  <div key={h.id} className="flex items-center justify-between text-sm">
+                    <span>{HABILITATION_TYPE_LABELS[h.type]}{h.libelle ? ` — ${h.libelle}` : ""}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={alerte ? (joursRestants < 0 ? "text-red-400" : "text-orange-400") : "text-muted-foreground"}>
+                        Valide jusqu'au {new Date(h.dateValidite).toLocaleDateString("fr-FR")}
+                      </span>
+                      <button type="button" onClick={() => handleArchiverHabilitation(h.id)} className="text-muted-foreground hover:text-red-400" title="Archiver">✕</button>
+                    </div>
+                  </div>
+                );
+              })}
+              {(habilitations ?? []).length === 0 && <p className="text-sm text-muted-foreground">Aucun document enregistre.</p>}
+            </div>
+            <form onSubmit={handleAjouterHabilitation} className="flex flex-wrap items-end gap-2">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Type</Label>
+                <select
+                  className="h-9 rounded-md border border-border bg-transparent px-2 text-sm"
+                  value={habForm.type}
+                  onChange={(e) => setHabForm({ ...habForm, type: e.target.value as HabilitationType })}
+                >
+                  {Object.entries(HABILITATION_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Libelle (optionnel)</Label>
+                <Input className="h-9 w-40" value={habForm.libelle ?? ""} onChange={(e) => setHabForm({ ...habForm, libelle: e.target.value })} placeholder="ex: R482 cat A" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Valide jusqu'au</Label>
+                <Input className="h-9" type="date" value={habForm.dateValidite} onChange={(e) => setHabForm({ ...habForm, dateValidite: e.target.value })} />
+              </div>
+              <Button type="submit" size="sm">Ajouter</Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </Layout>
   );

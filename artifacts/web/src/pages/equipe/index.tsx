@@ -8,9 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
+  HABILITATION_TYPE_LABELS,
   ROLE_LABELS,
   STATUT_LABELS,
   createEmployee,
+  listEcheancesRh,
   listEmployees,
   updateEmployee,
   updateEmployeeStatut,
@@ -30,6 +32,7 @@ export default function EquipePage() {
     queryKey: ["employees", showArchived],
     queryFn: () => listEmployees(showArchived),
   });
+  const { data: echeances } = useQuery({ queryKey: ["employees", "echeances"], queryFn: listEcheancesRh });
 
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -113,6 +116,24 @@ export default function EquipePage() {
             <Button onClick={openCreate}>Ajouter un employe</Button>
           </div>
         </div>
+
+        {(echeances?.length ?? 0) > 0 && (
+          <div className="mb-6 rounded-md border border-orange-900/50 bg-orange-950/20 px-4 py-3">
+            <p className="mb-2 text-sm font-semibold text-orange-400">Echeances RH sous 30 jours</p>
+            <div className="flex flex-col gap-1">
+              {echeances!.map((e) => (
+                <Link key={e.id} href={`/equipe/${e.employeeId}`} className="flex justify-between text-sm hover:underline">
+                  <span className={e.expiree ? "text-red-400" : "text-foreground"}>
+                    {e.employeeNom} — {HABILITATION_TYPE_LABELS[e.type]}{e.libelle ? ` (${e.libelle})` : ""}
+                  </span>
+                  <span className={e.expiree ? "text-red-400" : "text-orange-400"}>
+                    {e.expiree ? `Expiree depuis ${-e.joursRestants} j` : `Dans ${e.joursRestants} j`}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
           <Card>

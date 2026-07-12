@@ -73,3 +73,56 @@ export const STATUT_LABELS: Record<EmployeeStatut, string> = {
   INDISPONIBLE: "Indisponible",
   CONGE: "Conge",
 };
+
+export type HabilitationType = "CARTE_BTP" | "VISITE_MEDICALE" | "CACES" | "TITRE_SEJOUR" | "HABILITATION_ELECTRIQUE" | "AUTRE";
+
+export interface Habilitation {
+  id: string;
+  employeeId: string;
+  type: HabilitationType;
+  libelle: string | null;
+  dateValidite: string;
+  active: boolean;
+}
+
+export interface HabilitationInput {
+  type: HabilitationType;
+  libelle?: string;
+  dateValidite: string;
+}
+
+export interface HabilitationEcheance {
+  id: string;
+  employeeId: string;
+  employeeNom: string;
+  type: HabilitationType;
+  libelle: string | null;
+  dateValidite: string;
+  joursRestants: number;
+  expiree: boolean;
+}
+
+export function listEmployeeHabilitations(employeeId: string) {
+  return apiFetch<Habilitation[]>(`/employees/${employeeId}/habilitations`);
+}
+
+export function createEmployeeHabilitation(employeeId: string, input: HabilitationInput) {
+  return apiFetch<Habilitation>(`/employees/${employeeId}/habilitations`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export function archiverHabilitation(id: string) {
+  return apiFetch<Habilitation>(`/employees/habilitations/${id}`, { method: "PATCH", body: JSON.stringify({ active: false }) });
+}
+
+export function listEcheancesRh() {
+  return apiFetch<HabilitationEcheance[]>("/employees/echeances");
+}
+
+export const HABILITATION_TYPE_LABELS: Record<HabilitationType, string> = {
+  CARTE_BTP: "Carte BTP",
+  VISITE_MEDICALE: "Visite medicale",
+  CACES: "CACES",
+  TITRE_SEJOUR: "Titre de sejour",
+  HABILITATION_ELECTRIQUE: "Habilitation electrique",
+  AUTRE: "Autre",
+};
