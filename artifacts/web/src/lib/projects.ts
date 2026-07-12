@@ -7,6 +7,7 @@ export interface Project {
   id: string;
   nom: string;
   client: string;
+  clientId: string | null;
   adresse: string | null;
   codePostal: string | null;
   budgetEstimeHt: string;
@@ -21,6 +22,7 @@ export interface Project {
 export interface ProjectInput {
   nom: string;
   client: string;
+  clientId?: string;
   adresse?: string;
   codePostal?: string;
   budgetEstimeHt?: number;

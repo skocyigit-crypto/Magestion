@@ -11,6 +11,7 @@ projectsRouter.use(requireModuleAccess("chantiers"));
 const projectInputSchema = z.object({
   nom: z.string().min(1).max(200),
   client: z.string().min(1).max(200),
+  clientId: z.string().uuid().optional(),
   adresse: z.string().max(500).optional(),
   codePostal: z.string().max(10).optional(),
   budgetEstimeHt: z.number().nonnegative().max(9999999999.99).optional(),
@@ -53,6 +54,7 @@ projectsRouter.post("/", async (req, res) => {
       licenceId,
       nom: parsed.data.nom,
       client: parsed.data.client,
+      clientId: parsed.data.clientId,
       adresse: parsed.data.adresse,
       codePostal: parsed.data.codePostal,
       budgetEstimeHt: parsed.data.budgetEstimeHt?.toString(),

@@ -15,12 +15,14 @@ import {
   type ProjectCategorie,
   type ProjectInput,
 } from "@/lib/projects";
+import { listClients } from "@/lib/clients";
 
 const EMPTY_FORM: ProjectInput = { nom: "", client: "", adresse: "", codePostal: "", budgetEstimeHt: 0, objectifMargePercent: 0, categorie: "AUTRE" };
 
 export default function ChantiersPage() {
   const queryClient = useQueryClient();
   const { data: projects, isLoading, isError } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
+  const { data: clients } = useQuery({ queryKey: ["clients"], queryFn: () => listClients() });
 
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -116,6 +118,23 @@ export default function ChantiersPage() {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="nom">Nom du chantier</Label>
             <Input id="nom" required value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="clientFiche">Fiche client (optionnel)</Label>
+            <select
+              id="clientFiche"
+              className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+              value={form.clientId ?? ""}
+              onChange={(e) => {
+                const selected = (clients ?? []).find((c) => c.id === e.target.value);
+                setForm({ ...form, clientId: e.target.value || undefined, client: selected ? selected.nom : form.client });
+              }}
+            >
+              <option value="">— Client ponctuel (texte libre) —</option>
+              {(clients ?? []).map((c) => (
+                <option key={c.id} value={c.id}>{c.nom}</option>
+              ))}
+            </select>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="client">Client</Label>

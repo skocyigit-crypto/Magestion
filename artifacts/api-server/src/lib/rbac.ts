@@ -9,6 +9,7 @@ type Access = "read" | "write";
 const MODULE_ACCESS: Record<string, Partial<Record<Role, Access>>> = {
   chantiers: { COMMERCIAL: "read", TERRAIN: "write", COMPTABILITE: "read" },
   chantierPlanning: { COMMERCIAL: "read", TERRAIN: "write", COMPTABILITE: "read" },
+  clients: { COMMERCIAL: "write", COMPTABILITE: "read" },
   prospects: { COMMERCIAL: "write" },
   devis: { COMMERCIAL: "write" },
   factures: { COMPTABILITE: "write" },
