@@ -31,3 +31,4 @@ export * from "./avoirs.js";
 export * from "./retenuesLiberations.js";
 export * from "./employeeHabilitations.js";
 export * from "./declarationsTva.js";
+export * from "./chantierPhases.js";
