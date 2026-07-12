@@ -13,7 +13,7 @@ const projectInputSchema = z.object({
   client: z.string().min(1).max(200),
   adresse: z.string().max(500).optional(),
   codePostal: z.string().max(10).optional(),
-  budgetEstimeHt: z.number().nonnegative().optional(),
+  budgetEstimeHt: z.number().nonnegative().max(9999999999.99).optional(),
   objectifMargePercent: z.number().min(0).max(100).optional(),
   categorie: z.enum(["RENOVATION", "CONSTRUCTION_NEUVE", "ISOLATION", "EXTENSION", "AUTRE"]).optional(),
 });

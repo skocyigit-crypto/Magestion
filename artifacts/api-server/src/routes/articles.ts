@@ -15,7 +15,7 @@ const articleInputSchema = z.object({
   libelle: z.string().min(1).max(300),
   unite: z.string().min(1).max(20).optional(),
   categorie: CATEGORIE_ENUM.optional(),
-  prixUnitaireHt: z.number().nonnegative(),
+  prixUnitaireHt: z.number().nonnegative().max(99999999.99),
 });
 
 articlesRouter.get("/", async (req, res) => {

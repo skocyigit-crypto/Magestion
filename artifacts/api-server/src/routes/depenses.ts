@@ -16,7 +16,7 @@ const depenseInputSchema = z.object({
   objet: z.string().min(1).max(500),
   projectId: z.string().uuid().optional(),
   categorie: categorieEnum.optional(),
-  montantHt: z.number().nonnegative(),
+  montantHt: z.number().nonnegative().max(9999999999.99),
   tauxTva: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]),
   dateEcheance: z.string().optional(),
   autoliquidation: z.boolean().optional(),

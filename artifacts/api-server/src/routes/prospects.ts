@@ -19,7 +19,7 @@ const prospectInputSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   adresse: z.string().max(500).optional(),
   codePostal: z.string().max(10).optional(),
-  budgetEstime: z.number().nonnegative().optional(),
+  budgetEstime: z.number().nonnegative().max(9999999999.99).optional(),
   distanceKm: z.number().nonnegative().optional(),
   urgence: urgenceEnum.optional(),
   notes: z.string().max(4000).optional(),

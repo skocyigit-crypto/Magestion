@@ -58,7 +58,7 @@ situationsRouter.get("/", async (req, res) => {
 
 const situationInputSchema = z.object({
   projectId: z.string().uuid(),
-  marcheHt: z.number().nonnegative(),
+  marcheHt: z.number().nonnegative().max(9999999999.99),
   avancementPercent: z.number().min(0).max(100),
   tauxTva: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]).optional(),
   tauxRetenueGarantie: z.number().min(0).max(10).optional(),
