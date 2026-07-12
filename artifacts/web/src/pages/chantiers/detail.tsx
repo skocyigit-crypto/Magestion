@@ -24,6 +24,7 @@ import { STATUT_LABELS as SITUATION_STATUT_LABELS, listSituations } from "@/lib/
 import { listSousTraitants } from "@/lib/sousTraitants";
 import { ajouterCharge, ajouterParticipant, archiverCharge, getProrata, retirerParticipant } from "@/lib/prorata";
 import { getRetenueGarantie, libererRetenue } from "@/lib/retenuesGarantie";
+import { createChantierPhase, listChantierPhases, updateChantierPhase, type ChantierPhaseInput } from "@/lib/chantierPlanning";
 
 export default function ChantierDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -41,6 +42,7 @@ export default function ChantierDetailPage() {
   const { data: sousTraitants } = useQuery({ queryKey: ["sous-traitants"], queryFn: () => listSousTraitants() });
   const { data: prorata, refetch: refetchProrata } = useQuery({ queryKey: ["prorata", id], queryFn: () => getProrata(id) });
   const { data: retenueGarantie, refetch: refetchRetenue } = useQuery({ queryKey: ["retenue-garantie", id], queryFn: () => getRetenueGarantie(id) });
+  const { data: phases, refetch: refetchPhases } = useQuery({ queryKey: ["chantier-phases", id], queryFn: () => listChantierPhases(id) });
 
   const devisForProject = (devisList ?? []).filter((d) => d.projectId === id);
   const facturesForProject = (facturesList ?? []).filter((f) => f.projectId === id);
@@ -83,6 +85,32 @@ export default function ChantierDetailPage() {
 
   const [liberationForm, setLiberationForm] = useState({ montant: 0, dateLiberation: "" });
   const [liberationError, setLiberationError] = useState<string | null>(null);
+
+  const EMPTY_PHASE: ChantierPhaseInput = { nom: "", dateDebut: "", dateFin: "" };
+  const [phaseForm, setPhaseForm] = useState<ChantierPhaseInput>(EMPTY_PHASE);
+  const [phaseError, setPhaseError] = useState<string | null>(null);
+
+  async function handleAjouterPhase(e: React.FormEvent) {
+    e.preventDefault();
+    setPhaseError(null);
+    try {
+      await createChantierPhase(id, phaseForm);
+      setPhaseForm(EMPTY_PHASE);
+      await refetchPhases();
+    } catch (err) {
+      setPhaseError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
+    }
+  }
+
+  async function handleAvancementChange(phaseId: string, avancementPercent: number) {
+    await updateChantierPhase(phaseId, { avancementPercent });
+    await refetchPhases();
+  }
+
+  async function handleTogglePhaseActive(phaseId: string, active: boolean) {
+    await updateChantierPhase(phaseId, { active: !active });
+    await refetchPhases();
+  }
 
   async function handleLiberer(e: React.FormEvent) {
     e.preventDefault();
@@ -241,6 +269,80 @@ export default function ChantierDetailPage() {
             </Card>
           );
         })()}
+
+        <h2 className="mb-3 mt-6 text-lg font-semibold">Planning (Gantt)</h2>
+        <Card className="mb-6">
+          <CardContent className="flex flex-col gap-4 pt-6">
+            {(() => {
+              const rows = phases ?? [];
+              if (rows.length === 0) {
+                return <p className="text-sm text-muted-foreground">Aucune phase planifiee pour ce chantier.</p>;
+              }
+              const debuts = rows.map((p) => new Date(p.dateDebut).getTime());
+              const fins = rows.map((p) => new Date(p.dateFin).getTime());
+              const rangeStart = Math.min(...debuts);
+              const rangeEnd = Math.max(...fins);
+              const rangeSpan = Math.max(rangeEnd - rangeStart, 1);
+              return (
+                <div className="flex flex-col gap-3">
+                  {rows.map((p) => {
+                    const start = new Date(p.dateDebut).getTime();
+                    const end = new Date(p.dateFin).getTime();
+                    const leftPercent = ((start - rangeStart) / rangeSpan) * 100;
+                    const widthPercent = Math.max(((end - start) / rangeSpan) * 100, 1.5);
+                    const avancement = Number(p.avancementPercent);
+                    return (
+                      <div key={p.id} className={`flex flex-col gap-1 ${p.active ? "" : "opacity-50"}`}>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">{p.nom}</span>
+                          <span className="text-muted-foreground">{p.dateDebut} → {p.dateFin} ({avancement}%)</span>
+                        </div>
+                        <div className="relative h-5 w-full rounded-md bg-muted">
+                          <div
+                            className="absolute top-0 h-full rounded-md border border-primary/40 bg-primary/20"
+                            style={{ left: `${leftPercent}%`, width: `${widthPercent}%` }}
+                          >
+                            <div className="h-full rounded-l-md bg-primary/60" style={{ width: `${Math.min(avancement, 100)}%` }} />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={avancement}
+                            onChange={(e) => handleAvancementChange(p.id, Number(e.target.value))}
+                            className="h-1.5 w-40"
+                          />
+                          <Button size="sm" variant="outline" onClick={() => handleTogglePhaseActive(p.id, p.active)}>
+                            {p.active ? "Archiver" : "Reactiver"}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            <form onSubmit={handleAjouterPhase} className="mt-2 flex flex-wrap items-end gap-2 border-t border-border pt-4">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Nom de la phase</Label>
+                <Input className="h-9 w-48" value={phaseForm.nom} onChange={(e) => setPhaseForm({ ...phaseForm, nom: e.target.value })} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Debut</Label>
+                <Input className="h-9" type="date" value={phaseForm.dateDebut} onChange={(e) => setPhaseForm({ ...phaseForm, dateDebut: e.target.value })} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Fin</Label>
+                <Input className="h-9" type="date" value={phaseForm.dateFin} onChange={(e) => setPhaseForm({ ...phaseForm, dateFin: e.target.value })} />
+              </div>
+              <Button type="submit" size="sm" disabled={!phaseForm.nom || !phaseForm.dateDebut || !phaseForm.dateFin}>Ajouter une phase</Button>
+            </form>
+            {phaseError && <p className="text-sm text-red-400">{phaseError}</p>}
+          </CardContent>
+        </Card>
 
         <h2 className="mb-3 text-lg font-semibold">Suivi financier du chantier</h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

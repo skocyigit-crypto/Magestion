@@ -8,6 +8,7 @@ type Access = "read" | "write";
 // Un role absent d'un module = aucun acces (ni lecture ni ecriture).
 const MODULE_ACCESS: Record<string, Partial<Record<Role, Access>>> = {
   chantiers: { COMMERCIAL: "read", TERRAIN: "write", COMPTABILITE: "read" },
+  chantierPlanning: { COMMERCIAL: "read", TERRAIN: "write", COMPTABILITE: "read" },
   prospects: { COMMERCIAL: "write" },
   devis: { COMMERCIAL: "write" },
   factures: { COMPTABILITE: "write" },
