@@ -12,6 +12,8 @@ export interface JournalEntry {
   ecritureLib: string;
   debit: string;
   credit: string;
+  ecritureLet: string | null;
+  dateLet: string | null;
   sourceType: string;
   sourceId: string;
 }
@@ -41,6 +43,18 @@ export function listBalance(exercice?: number) {
 
 export function listPlanComptable() {
   return apiFetch<PlanComptableLigne[]>("/comptabilite/plan-comptable");
+}
+
+export function listEcrituresNonLettrees(compteNum: string) {
+  return apiFetch<JournalEntry[]>(`/comptabilite/lettrage/${compteNum}`);
+}
+
+export function lettrer(entryIds: string[]) {
+  return apiFetch<{ code: string; entryIds: string[] }>("/comptabilite/lettrage", { method: "POST", body: JSON.stringify({ entryIds }) });
+}
+
+export function annulerLettrage(code: string) {
+  return apiFetch<{ ok: true }>(`/comptabilite/lettrage/${code}/annuler`, { method: "POST" });
 }
 
 const API_BASE = `${import.meta.env.VITE_API_URL ?? ""}/api`;
