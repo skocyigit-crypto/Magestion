@@ -1,5 +1,6 @@
 import { pgTable, uuid, text, varchar, numeric, boolean, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { licencesTable } from "./licences.js";
+import { clientsTable } from "./clients.js";
 
 export const projectCategorieEnum = pgEnum("project_categorie", [
   "RENOVATION",
@@ -23,6 +24,10 @@ export const projectsTable = pgTable("projects", {
     .references(() => licencesTable.id),
   nom: text("nom").notNull(),
   client: text("client").notNull(),
+  // Lien optionnel vers une fiche client centralisee (voir schema/clients.ts).
+  // Null accepte : un chantier ponctuel peut rester sur le simple texte libre
+  // "client" ci-dessus, sans creer de fiche.
+  clientId: uuid("client_id").references(() => clientsTable.id),
   adresse: text("adresse"),
   codePostal: varchar("code_postal", { length: 10 }),
   budgetEstimeHt: numeric("budget_estime_ht", { precision: 12, scale: 2 }).notNull().default("0"),

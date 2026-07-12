@@ -18,6 +18,7 @@ const NAV_GROUPS: (NavLink | NavGroup)[] = [
     label: "Commercial",
     items: [
       { href: "/chantiers", label: "Chantiers" },
+      { href: "/clients", label: "Clients" },
       { href: "/prospects", label: "Prospects" },
       { href: "/devis", label: "Devis" },
       { href: "/agenda-commercial", label: "Agenda commercial" },
