@@ -46,6 +46,7 @@ import { stripeWebhookRouter } from "./routes/stripe-webhook.js";
 import { superAdminRouter } from "./routes/super-admin.js";
 import { tachesRouter } from "./routes/taches.js";
 import { clotureComptableRouter } from "./routes/clotureComptable.js";
+import { immobilisationsRouter } from "./routes/immobilisations.js";
 import { closeDb } from "@magestion/db";
 
 const app = express();
@@ -110,6 +111,7 @@ app.use("/api/billing", billingRouter);
 app.use("/api/super-admin", superAdminRouter);
 app.use("/api/taches", tachesRouter);
 app.use("/api/cloture-comptable", clotureComptableRouter);
+app.use("/api/immobilisations", immobilisationsRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Route introuvable" });

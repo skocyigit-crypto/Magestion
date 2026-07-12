@@ -37,3 +37,4 @@ export * from "./fournisseurs.js";
 export * from "./stripeEvents.js";
 export * from "./taches.js";
 export * from "./clotureComptable.js";
+export * from "./immobilisations.js";
