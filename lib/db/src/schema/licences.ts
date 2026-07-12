@@ -20,6 +20,12 @@ export const licencesTable = pgTable("licences", {
   pdpLegalEntityId: text("pdp_legal_entity_id"),
   plan: licencePlanEnum("plan").notNull().default("TRIAL"),
   status: licenceStatusEnum("status").notNull().default("ACTIF"),
+  // Facturation Stripe (voir routes/billing.ts, routes/stripe-webhook.ts).
+  // Null tant qu'aucun paiement n'a jamais ete initie — une licence TRIAL
+  // sans carte enregistree n'a ni customer ni subscription Stripe.
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

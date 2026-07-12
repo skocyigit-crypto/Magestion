@@ -6,11 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fetchLogoBlobUrl, getParametres, updateParametres, uploadLogo, type ParametresInput } from "@/lib/parametres";
+import { PLAN_LABELS, getBillingStatus, listBillingPlans, openBillingPortal, startCheckout, type PlanKey } from "@/lib/billing";
 
 const EMPTY_FORM: ParametresInput = { nom: "" };
 
 export default function ParametresPage() {
   const { data: parametres, refetch, isError } = useQuery({ queryKey: ["parametres"], queryFn: getParametres });
+  const { data: billingStatus, refetch: refetchBillingStatus } = useQuery({ queryKey: ["billing-status"], queryFn: getBillingStatus });
+  const { data: billingPlans } = useQuery({ queryKey: ["billing-plans"], queryFn: listBillingPlans });
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState<PlanKey | null>(null);
 
   const [form, setForm] = useState<ParametresInput>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -74,6 +79,37 @@ export default function ParametresPage() {
     }
   }
 
+  async function handleCheckout(planKey: PlanKey) {
+    setCheckoutError(null);
+    setCheckoutLoading(planKey);
+    try {
+      const result = await startCheckout(planKey);
+      if (result.url) {
+        window.location.href = result.url;
+        return;
+      }
+      await refetchBillingStatus();
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : "Erreur lors de la mise a niveau");
+    } finally {
+      setCheckoutLoading(null);
+    }
+  }
+
+  async function handlePortal() {
+    setCheckoutError(null);
+    try {
+      const result = await openBillingPortal();
+      if (result.url) {
+        window.location.href = result.url;
+      } else if (result.simulation) {
+        setCheckoutError("Mode simulation : aucun compte Stripe reel n'est configure, il n'y a pas de portail de facturation a ouvrir.");
+      }
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : "Erreur lors de l'ouverture du portail");
+    }
+  }
+
   return (
     <Layout>
       <div className="mx-auto max-w-3xl px-6 py-8">
@@ -83,6 +119,53 @@ export default function ParametresPage() {
         </p>
 
         {isError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
+
+        <Card className="mb-6">
+          <CardHeader><CardTitle>Abonnement</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {billingStatus && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-muted/30 p-3 text-sm">
+                <div>
+                  <p>
+                    Plan actuel : <span className="font-semibold">{PLAN_LABELS[billingStatus.plan]}</span>
+                    {billingStatus.plan === "TRIAL" && billingStatus.joursRestantsEssai !== null && (
+                      <span className={billingStatus.essaiExpire ? "ml-2 text-red-400" : "ml-2 text-muted-foreground"}>
+                        {billingStatus.essaiExpire ? "— essai expire" : `— ${billingStatus.joursRestantsEssai} jour(s) restant(s)`}
+                      </span>
+                    )}
+                  </p>
+                  {billingStatus.simulation && (
+                    <p className="mt-1 text-xs text-orange-400">Mode simulation : aucun compte Stripe reel configure, les mises a niveau sont immediates et gratuites (dev uniquement).</p>
+                  )}
+                </div>
+                {billingStatus.abonneStripe && (
+                  <Button size="sm" variant="outline" onClick={handlePortal}>Gerer l'abonnement</Button>
+                )}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              {(billingPlans ?? []).map((plan) => (
+                <div key={plan.key} className={`flex flex-col gap-2 rounded-md border p-4 text-sm ${billingStatus?.plan === plan.key ? "border-primary" : "border-border"}`}>
+                  <p className="font-semibold">{plan.nom}</p>
+                  <p className="text-lg font-semibold">{plan.prixMensuelEur} € <span className="text-xs font-normal text-muted-foreground">/ mois</span></p>
+                  <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
+                    {plan.features.map((f) => <li key={f}>• {f}</li>)}
+                  </ul>
+                  <Button
+                    size="sm"
+                    className="mt-2"
+                    disabled={!plan.disponible || billingStatus?.plan === plan.key || checkoutLoading === plan.key}
+                    onClick={() => handleCheckout(plan.key)}
+                  >
+                    {checkoutLoading === plan.key ? "Redirection..." : billingStatus?.plan === plan.key ? "Plan actuel" : "Choisir ce plan"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+            {checkoutError && <p className="text-sm text-red-400">{checkoutError}</p>}
+          </CardContent>
+        </Card>
 
         <Card className="mb-6">
           <CardHeader><CardTitle>Logo</CardTitle></CardHeader>
