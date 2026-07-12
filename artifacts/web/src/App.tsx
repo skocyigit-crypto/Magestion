@@ -13,6 +13,7 @@ const ClientDetailPage = lazy(() => import("@/pages/clients/detail"));
 const FournisseursPage = lazy(() => import("@/pages/fournisseurs/index"));
 const FournisseurDetailPage = lazy(() => import("@/pages/fournisseurs/detail"));
 const SuperAdminPage = lazy(() => import("@/pages/super-admin/index"));
+const TachesPage = lazy(() => import("@/pages/taches/index"));
 const ProspectsPage = lazy(() => import("@/pages/prospects/index"));
 const ProspectDetailPage = lazy(() => import("@/pages/prospects/detail"));
 const DevisPage = lazy(() => import("@/pages/devis/index"));
@@ -61,6 +62,7 @@ export default function App() {
         <Route path="/fournisseurs" component={FournisseursPage} />
         <Route path="/fournisseurs/:id" component={FournisseurDetailPage} />
         <Route path="/super-admin" component={SuperAdminPage} />
+        <Route path="/taches" component={TachesPage} />
         <Route path="/prospects" component={ProspectsPage} />
         <Route path="/prospects/:id" component={ProspectDetailPage} />
         <Route path="/devis" component={DevisPage} />

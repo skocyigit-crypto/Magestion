@@ -11,6 +11,7 @@ const MODULE_ACCESS: Record<string, Partial<Record<Role, Access>>> = {
   chantierPlanning: { COMMERCIAL: "read", TERRAIN: "write", COMPTABILITE: "read" },
   clients: { COMMERCIAL: "write", COMPTABILITE: "read" },
   fournisseurs: { COMPTABILITE: "write", TERRAIN: "read" },
+  taches: { COMPTABILITE: "write", COMMERCIAL: "write", TERRAIN: "write" },
   prospects: { COMMERCIAL: "write" },
   devis: { COMMERCIAL: "write" },
   factures: { COMPTABILITE: "write" },
