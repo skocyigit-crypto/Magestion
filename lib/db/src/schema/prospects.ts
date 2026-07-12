@@ -14,6 +14,7 @@ export const prospectStatutEnum = pgEnum("prospect_statut", [
 ]);
 
 export const prospectUrgenceEnum = pgEnum("prospect_urgence", ["BASSE", "NORMALE", "URGENTE", "TRES_URGENTE"]);
+export const raisonPerteEnum = pgEnum("raison_perte", ["PRIX", "DELAI", "CONCURRENT", "SANS_SUITE", "AUTRE"]);
 
 export const prospectsTable = pgTable("prospects", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -32,6 +33,10 @@ export const prospectsTable = pgTable("prospects", {
   statut: prospectStatutEnum("statut").notNull().default("NOUVEAU"),
   score: integer("score").notNull().default(50),
   notes: text("notes"),
+  // Renseignes uniquement quand statut passe a PERDU (voir routes/prospects.ts)
+  // — analyse des motifs de perte pour ameliorer le taux de conversion.
+  raisonPerte: raisonPerteEnum("raison_perte"),
+  raisonPerteDetail: text("raison_perte_detail"),
   consentementRgpd: boolean("consentement_rgpd").notNull().default(false),
   consentementDate: timestamp("consentement_date", { withTimezone: true }),
   // Irreversible (droit a l'effacement RGPD) — voir routes/rgpd.ts. Aucun

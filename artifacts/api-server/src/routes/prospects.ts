@@ -1,16 +1,18 @@
 import { Router } from "express";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { db, prospectsTable, journalRgpdTable } from "@magestion/db";
+import { db, prospectsTable, journalRgpdTable, devisTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
 import { computeLeadScore } from "../lib/leadScoring.js";
+import { withNumero } from "../lib/numbering.js";
 
 export const prospectsRouter = Router();
 prospectsRouter.use(requireModuleAccess("prospects"));
 
 const urgenceEnum = z.enum(["BASSE", "NORMALE", "URGENTE", "TRES_URGENTE"]);
 const statutEnum = z.enum(["NOUVEAU", "CONTACTE", "RDV_PLANIFIE", "DEVIS_ENVOYE", "NEGOCIATION", "GAGNE", "PERDU"]);
+const raisonPerteEnum = z.enum(["PRIX", "DELAI", "CONCURRENT", "SANS_SUITE", "AUTRE"]);
 
 const prospectInputSchema = z.object({
   nom: z.string().min(1).max(200),
@@ -29,6 +31,8 @@ const prospectUpdateSchema = prospectInputSchema.partial().extend({
   statut: statutEnum.optional(),
   active: z.boolean().optional(),
   consentementRgpd: z.boolean().optional(),
+  raisonPerte: raisonPerteEnum.optional(),
+  raisonPerteDetail: z.string().max(2000).optional(),
 });
 
 // GET /prospects?onlyInactive=true -> corbeille (archives), sinon liste active par defaut
@@ -49,10 +53,27 @@ prospectsRouter.post("/", async (req, res) => {
   const licenceId = requireLicenceId(req.user!, res);
   if (!licenceId) return;
 
-  const parsed = prospectInputSchema.safeParse(req.body);
+  const parsed = z.object({ force: z.boolean().optional() }).and(prospectInputSchema).safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Requete invalide", details: parsed.error.flatten() });
     return;
+  }
+
+  // Detection de doublon (telephone/email deja utilise par un prospect actif)
+  // — avertit plutot que de bloquer : le meme contact peut legitimement
+  // revenir sur un nouveau projet. `force: true` cree quand meme.
+  if (!parsed.data.force && (parsed.data.telephone || parsed.data.email)) {
+    const actifs = await db.select().from(prospectsTable).where(and(eq(prospectsTable.licenceId, licenceId), eq(prospectsTable.active, true)));
+    const telephoneNorm = parsed.data.telephone?.replace(/[\s.-]/g, "");
+    const doublon = actifs.find(
+      (p) =>
+        (telephoneNorm && p.telephone?.replace(/[\s.-]/g, "") === telephoneNorm) ||
+        (parsed.data.email && p.email?.toLowerCase() === parsed.data.email.toLowerCase()),
+    );
+    if (doublon) {
+      res.status(409).json({ error: "Un prospect actif existe deja avec ce telephone/email", doublon: { id: doublon.id, nom: doublon.nom, statut: doublon.statut } });
+      return;
+    }
   }
 
   const budgetEstime = parsed.data.budgetEstime ?? 0;
@@ -118,6 +139,13 @@ prospectsRouter.patch("/:id", async (req, res) => {
     return;
   }
 
+  // Marquer PERDU sans motif prive l'analyse commerciale de tout signal
+  // exploitable — exige raisonPerte dans cette requete ou deja enregistree.
+  if (parsed.data.statut === "PERDU" && !parsed.data.raisonPerte && !existing.raisonPerte) {
+    res.status(400).json({ error: "raisonPerte requise pour marquer un prospect PERDU" });
+    return;
+  }
+
   const { budgetEstime, distanceKm, urgence, consentementRgpd, ...rest } = parsed.data;
   // Recalcul du score si l'un des facteurs change (budget/urgence/distance).
   const nextBudget = budgetEstime ?? Number(existing.budgetEstime);
@@ -153,4 +181,46 @@ prospectsRouter.patch("/:id", async (req, res) => {
   }
 
   res.json(updated);
+});
+
+// Cree un devis BROUILLON prefilled depuis un prospect (client/email repris,
+// budget estime comme montant de depart — a affiner) et fait avancer le
+// prospect a DEVIS_ENVOYE si son statut ne l'a pas deja depasse. N'importe
+// combien de devis peuvent etre crees depuis le meme prospect (pas d'idempotence).
+prospectsRouter.post("/:id/convertir-devis", async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  const [prospect] = await db
+    .select()
+    .from(prospectsTable)
+    .where(and(eq(prospectsTable.id, req.params.id), eq(prospectsTable.licenceId, licenceId)))
+    .limit(1);
+  if (!prospect) {
+    res.status(404).json({ error: "Prospect introuvable" });
+    return;
+  }
+
+  const devis = await withNumero("devis", "DEV", licenceId, async (numero) => {
+    const [row] = await db
+      .insert(devisTable)
+      .values({
+        licenceId,
+        numero,
+        client: prospect.nom,
+        clientEmail: prospect.email || undefined,
+        objet: prospect.notes ? prospect.notes.slice(0, 500) : `Devis suite a contact — ${prospect.nom}`,
+        montantHt: prospect.budgetEstime,
+        tauxTva: "20",
+      })
+      .returning();
+    return row;
+  });
+
+  const PROGRESSION: Record<string, boolean> = { NOUVEAU: true, CONTACTE: true, RDV_PLANIFIE: true };
+  if (PROGRESSION[prospect.statut]) {
+    await db.update(prospectsTable).set({ statut: "DEVIS_ENVOYE", updatedAt: new Date() }).where(eq(prospectsTable.id, prospect.id));
+  }
+
+  res.status(201).json(devis);
 });

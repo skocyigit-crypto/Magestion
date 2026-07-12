@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/api";
 
 export type ProspectUrgence = "BASSE" | "NORMALE" | "URGENTE" | "TRES_URGENTE";
 export type ProspectStatut = "NOUVEAU" | "CONTACTE" | "RDV_PLANIFIE" | "DEVIS_ENVOYE" | "NEGOCIATION" | "GAGNE" | "PERDU";
+export type RaisonPerte = "PRIX" | "DELAI" | "CONCURRENT" | "SANS_SUITE" | "AUTRE";
 
 export interface Prospect {
   id: string;
@@ -17,6 +18,8 @@ export interface Prospect {
   statut: ProspectStatut;
   score: number;
   notes: string | null;
+  raisonPerte: RaisonPerte | null;
+  raisonPerteDetail: string | null;
   consentementRgpd: boolean;
   consentementDate: string | null;
   anonymise: boolean;
@@ -42,8 +45,10 @@ export function listProspects() {
   return apiFetch<Prospect[]>("/prospects");
 }
 
-export function createProspect(input: ProspectInput) {
-  return apiFetch<Prospect>("/prospects", { method: "POST", body: JSON.stringify(input) });
+// Le backend renvoie 409 si un prospect actif partage deja le meme
+// telephone/email — passer force:true pour creer quand meme.
+export function createProspect(input: ProspectInput, force = false) {
+  return apiFetch<Prospect>("/prospects", { method: "POST", body: JSON.stringify({ ...input, force }) });
 }
 
 export function getProspect(id: string) {
@@ -52,9 +57,13 @@ export function getProspect(id: string) {
 
 export function updateProspect(
   id: string,
-  input: Partial<ProspectInput> & { statut?: ProspectStatut; active?: boolean },
+  input: Partial<ProspectInput> & { statut?: ProspectStatut; active?: boolean; raisonPerte?: RaisonPerte; raisonPerteDetail?: string },
 ) {
   return apiFetch<Prospect>(`/prospects/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export function convertirEnDevis(id: string) {
+  return apiFetch<{ id: string; numero: string }>(`/prospects/${id}/convertir-devis`, { method: "POST" });
 }
 
 // Ordre du pipeline Kanban (colonnes de gauche a droite).
@@ -83,4 +92,12 @@ export const URGENCE_LABELS: Record<ProspectUrgence, string> = {
   NORMALE: "Normale",
   URGENTE: "Urgente",
   TRES_URGENTE: "Tres urgente",
+};
+
+export const RAISON_PERTE_LABELS: Record<RaisonPerte, string> = {
+  PRIX: "Prix trop eleve",
+  DELAI: "Delai trop long",
+  CONCURRENT: "Parti chez un concurrent",
+  SANS_SUITE: "Sans suite / injoignable",
+  AUTRE: "Autre",
 };

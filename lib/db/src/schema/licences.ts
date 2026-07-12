@@ -14,6 +14,10 @@ export const licencesTable = pgTable("licences", {
   telephone: varchar("telephone", { length: 30 }),
   tvaIntracommunautaire: varchar("tva_intracommunautaire", { length: 20 }),
   logoChemin: text("logo_chemin"),
+  // Identifiant de la "Legal Entity" chez le fournisseur PDP (ex: Storecove) —
+  // une licence = une entite legale distincte cote PDP (compte PDP unique pour
+  // toutes les licences).
+  pdpLegalEntityId: text("pdp_legal_entity_id"),
   plan: licencePlanEnum("plan").notNull().default("TRIAL"),
   status: licenceStatusEnum("status").notNull().default("ACTIF"),
   active: boolean("active").notNull().default(true),
