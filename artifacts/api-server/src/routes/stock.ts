@@ -92,6 +92,10 @@ stockRouter.patch("/:id", async (req, res) => {
 const mouvementInputSchema = z.object({
   type: z.enum(["ENTREE", "SORTIE"]),
   quantite: z.number().positive().max(99999999.99),
+  // ENTREE uniquement : prix d'achat de ce lot, recalcule le CUMP de
+  // l'article. Omis -> le CUMP existant n'est pas modifie (utile si le prix
+  // n'est pas encore connu, ex: reception avant reception de la facture fournisseur).
+  prixUnitaireHt: z.number().nonnegative().max(99999999.99).optional(),
   motif: z.string().max(500).optional(),
   projectId: z.string().uuid().optional(),
 });
@@ -107,14 +111,31 @@ stockRouter.post("/:id/mouvements", async (req, res) => {
   }
 
   const delta = parsed.data.type === "ENTREE" ? parsed.data.quantite : -parsed.data.quantite;
+  const prixEntree = parsed.data.type === "ENTREE" ? parsed.data.prixUnitaireHt : undefined;
 
   // Update conditionnel et atomique : la condition de non-negativite est
   // verifiee par la base au moment meme de l'ecriture (WHERE), pas sur une
   // lecture prealable — deux sorties concurrentes ne peuvent plus toutes les
   // deux lire un stock suffisant puis faire passer la quantite en negatif.
+  // Si un prix d'entree est fourni, le CUMP (cout unitaire moyen pondere) est
+  // recalcule dans la MEME expression SQL (Postgres evalue tout le SET contre
+  // les valeurs AVANT mise a jour) — pas de lecture separee, donc pas de race
+  // possible entre la lecture de l'ancien CUMP et l'ecriture du nouveau.
   const [item] = await db
     .update(stockItemsTable)
-    .set({ quantiteActuelle: sql`${stockItemsTable.quantiteActuelle} + ${delta}`, updatedAt: new Date() })
+    .set({
+      quantiteActuelle: sql`${stockItemsTable.quantiteActuelle} + ${delta}`,
+      ...(prixEntree !== undefined
+        ? {
+            // ::numeric explicite sur les deux operandes du produit
+            // parametre*parametre : sans ca, Postgres ne peut pas choisir
+            // d'operateur de multiplication (deux parametres non types de
+            // part et d'autre -> erreur 42725 "ambiguous operator").
+            prixUnitaireHt: sql`ROUND((${stockItemsTable.quantiteActuelle} * ${stockItemsTable.prixUnitaireHt} + ${parsed.data.quantite}::numeric * ${prixEntree}::numeric) / NULLIF(${stockItemsTable.quantiteActuelle} + ${parsed.data.quantite}, 0), 2)`,
+          }
+        : {}),
+      updatedAt: new Date(),
+    })
     .where(
       and(
         eq(stockItemsTable.id, req.params.id),
@@ -146,6 +167,7 @@ stockRouter.post("/:id/mouvements", async (req, res) => {
       projectId: parsed.data.projectId,
       type: parsed.data.type,
       quantite: parsed.data.quantite.toString(),
+      prixUnitaireHt: prixEntree?.toString(),
       motif: parsed.data.motif,
     })
     .returning();

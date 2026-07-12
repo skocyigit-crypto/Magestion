@@ -31,6 +31,7 @@ export default function StockPage() {
   const [mouvementFor, setMouvementFor] = useState<{ id: string; nom: string } | null>(null);
   const [mouvementType, setMouvementType] = useState<"ENTREE" | "SORTIE">("ENTREE");
   const [mouvementQte, setMouvementQte] = useState(1);
+  const [mouvementPrix, setMouvementPrix] = useState<number | "">("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,10 +93,11 @@ export default function StockPage() {
     if (!mouvementFor) return;
     setError(null);
     try {
-      await createMouvement(mouvementFor.id, mouvementType, mouvementQte);
+      await createMouvement(mouvementFor.id, mouvementType, mouvementQte, undefined, mouvementType === "ENTREE" && mouvementPrix !== "" ? mouvementPrix : undefined);
       await queryClient.invalidateQueries({ queryKey: ["stock"] });
       setMouvementFor(null);
       setMouvementQte(1);
+      setMouvementPrix("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur lors du mouvement");
     }
@@ -143,6 +145,7 @@ export default function StockPage() {
                 <th className="px-4 py-2">Nom</th>
                 <th className="px-4 py-2">Quantite actuelle</th>
                 <th className="px-4 py-2">Seuil alerte</th>
+                <th className="px-4 py-2">Cout moyen pondere (CUMP)</th>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
@@ -152,6 +155,7 @@ export default function StockPage() {
                   <td className="px-4 py-2">{item.nom}{item.enAlerte && " ⚠"}</td>
                   <td className="px-4 py-2">{item.quantiteActuelle} {item.unite}</td>
                   <td className="px-4 py-2">{item.seuilAlerte} {item.unite}</td>
+                  <td className="px-4 py-2">{Number(item.prixUnitaireHt).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €</td>
                   <td className="px-4 py-2">
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => setMouvementFor({ id: item.id, nom: item.nom })}>
@@ -166,7 +170,7 @@ export default function StockPage() {
                 </tr>
               ))}
               {!isLoading && !isError && filtered.length === 0 && (
-                <tr><td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">Aucun article de stock pour le moment.</td></tr>
+                <tr><td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">Aucun article de stock pour le moment.</td></tr>
               )}
             </tbody>
           </table>
@@ -240,6 +244,20 @@ export default function StockPage() {
             <Label htmlFor="mvtQte">Quantite</Label>
             <Input id="mvtQte" type="number" min={0.01} step="0.01" value={mouvementQte} onChange={(e) => setMouvementQte(Number(e.target.value))} />
           </div>
+          {mouvementType === "ENTREE" && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="mvtPrix">Prix d'achat unitaire HT (€, optionnel)</Label>
+              <Input
+                id="mvtPrix"
+                type="number"
+                min={0}
+                step="0.01"
+                value={mouvementPrix}
+                onChange={(e) => setMouvementPrix(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="Recalcule le cout moyen pondere (CUMP) si renseigne"
+              />
+            </div>
+          )}
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setMouvementFor(null)}>Annuler</Button>
