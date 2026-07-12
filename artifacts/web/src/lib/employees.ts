@@ -15,6 +15,7 @@ export interface Employee {
   tauxHoraire: string;
   couleur: string;
   statut: EmployeeStatut;
+  anonymise: boolean;
   active: boolean;
 }
 

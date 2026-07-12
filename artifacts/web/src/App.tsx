@@ -18,6 +18,7 @@ const DepensesPage = lazy(() => import("@/pages/depenses/index"));
 const CommandesPage = lazy(() => import("@/pages/commandes/index"));
 const SituationsPage = lazy(() => import("@/pages/situations/index"));
 const ComptabilitePage = lazy(() => import("@/pages/comptabilite/index"));
+const RapprochementBancairePage = lazy(() => import("@/pages/rapprochement-bancaire/index"));
 const EquipePage = lazy(() => import("@/pages/equipe/index"));
 const EmployeeDetailPage = lazy(() => import("@/pages/equipe/detail"));
 const PointagePage = lazy(() => import("@/pages/pointage/index"));
@@ -34,6 +35,7 @@ const RelancesPage = lazy(() => import("@/pages/relances/index"));
 const ImportIaPage = lazy(() => import("@/pages/import-ia/index"));
 const UtilisateursPage = lazy(() => import("@/pages/utilisateurs/index"));
 const ParametresPage = lazy(() => import("@/pages/parametres/index"));
+const RgpdPage = lazy(() => import("@/pages/rgpd/index"));
 
 export default function App() {
   return (
@@ -55,6 +57,7 @@ export default function App() {
         <Route path="/commandes" component={CommandesPage} />
         <Route path="/situations" component={SituationsPage} />
         <Route path="/comptabilite" component={ComptabilitePage} />
+        <Route path="/rapprochement-bancaire" component={RapprochementBancairePage} />
         <Route path="/equipe" component={EquipePage} />
         <Route path="/equipe/:id" component={EmployeeDetailPage} />
         <Route path="/pointage" component={PointagePage} />
@@ -71,6 +74,7 @@ export default function App() {
         <Route path="/import-ia" component={ImportIaPage} />
         <Route path="/utilisateurs" component={UtilisateursPage} />
         <Route path="/parametres" component={ParametresPage} />
+        <Route path="/rgpd" component={RgpdPage} />
         <Route>404 — Page introuvable</Route>
       </Switch>
     </Suspense>

@@ -21,3 +21,5 @@ export * from "./documents.js";
 export * from "./vehicles.js";
 export * from "./agenda.js";
 export * from "./relances.js";
+export * from "./transactionsBancaires.js";
+export * from "./journalRgpd.js";

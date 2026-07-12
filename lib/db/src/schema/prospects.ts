@@ -32,6 +32,11 @@ export const prospectsTable = pgTable("prospects", {
   statut: prospectStatutEnum("statut").notNull().default("NOUVEAU"),
   score: integer("score").notNull().default(50),
   notes: text("notes"),
+  consentementRgpd: boolean("consentement_rgpd").notNull().default(false),
+  consentementDate: timestamp("consentement_date", { withTimezone: true }),
+  // Irreversible (droit a l'effacement RGPD) — voir routes/rgpd.ts. Aucun
+  // champ identifiant n'est jamais restaure une fois anonymise=true.
+  anonymise: boolean("anonymise").notNull().default(false),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

@@ -32,6 +32,7 @@ const NAV_GROUPS: (NavLink | NavGroup)[] = [
       { href: "/commandes", label: "Commandes" },
       { href: "/situations", label: "Situations" },
       { href: "/comptabilite", label: "Comptabilite" },
+      { href: "/rapprochement-bancaire", label: "Rapprochement bancaire" },
     ],
   },
   {
@@ -184,6 +185,7 @@ export function Layout({ children }: { children: ReactNode }) {
             items: [
               { href: "/utilisateurs", label: "Utilisateurs" },
               { href: "/parametres", label: "Parametres" },
+              { href: "/rgpd", label: "RGPD" },
             ],
           },
         ]
