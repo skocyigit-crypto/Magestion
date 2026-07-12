@@ -6,10 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { annulerLettrage, downloadFec, lettrer, listBalance, listEcrituresNonLettrees, listJournal, listPlanComptable } from "@/lib/comptabilite";
 import { calculerTva, creerDeclarationTva, listDeclarationsTva, validerDeclarationTva, type TvaCalcul } from "@/lib/declarationsTva";
+import {
+  STATUT_LABELS as CLOTURE_STATUT_LABELS,
+  getClotureStats,
+  listEtapesCloture,
+  reinitialiserCloture,
+  updateEtapeCloture,
+  type EtapeClotureStatut,
+} from "@/lib/clotureComptable";
 
 const fmt = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-type Tab = "journal" | "balance" | "plan" | "lettrage" | "tva";
+type Tab = "journal" | "balance" | "plan" | "lettrage" | "tva" | "cloture";
 
 export default function ComptabilitePage() {
   const queryClient = useQueryClient();
@@ -98,6 +106,29 @@ export default function ComptabilitePage() {
     await queryClient.invalidateQueries({ queryKey: ["declarations-tva"] });
   }
 
+  const [exerciceCloture, setExerciceCloture] = useState<string>(String(new Date().getFullYear()));
+  const { data: etapesCloture, isLoading: etapesClotureLoading, isError: etapesClotureError } = useQuery({
+    queryKey: ["cloture-comptable", exerciceCloture],
+    queryFn: () => listEtapesCloture(exerciceCloture),
+    enabled: tab === "cloture",
+  });
+  const { data: clotureStats } = useQuery({
+    queryKey: ["cloture-comptable", "stats", exerciceCloture],
+    queryFn: () => getClotureStats(exerciceCloture),
+    enabled: tab === "cloture",
+  });
+
+  async function handleEtapeStatutChange(id: string, statut: EtapeClotureStatut) {
+    await updateEtapeCloture(id, { statut });
+    await queryClient.invalidateQueries({ queryKey: ["cloture-comptable"] });
+  }
+
+  async function handleReinitialiserCloture() {
+    if (!confirm(`Reinitialiser toute la checklist de cloture ${exerciceCloture} ? Tous les statuts repasseront a "A faire".`)) return;
+    await reinitialiserCloture(exerciceCloture);
+    await queryClient.invalidateQueries({ queryKey: ["cloture-comptable"] });
+  }
+
   const { data: journal, isLoading: journalLoading, isError: journalError } = useQuery({ queryKey: ["comptabilite", "journal"], queryFn: listJournal });
   const { data: balance, isLoading: balanceLoading, isError: balanceError } = useQuery({
     queryKey: ["comptabilite", "balance", exerciceNum],
@@ -182,6 +213,9 @@ export default function ComptabilitePage() {
           </Button>
           <Button variant={tab === "tva" ? "default" : "outline"} size="sm" onClick={() => setTab("tva")}>
             Declarations TVA
+          </Button>
+          <Button variant={tab === "cloture" ? "default" : "outline"} size="sm" onClick={() => setTab("cloture")}>
+            Cloture d'exercice
           </Button>
         </div>
 
@@ -422,6 +456,70 @@ export default function ComptabilitePage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </>
+        )}
+        {tab === "cloture" && (
+          <>
+            <div className="mb-4 flex items-end justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="exerciceCloture" className="text-xs text-muted-foreground">Exercice</label>
+                <Input id="exerciceCloture" className="w-28" value={exerciceCloture} onChange={(e) => setExerciceCloture(e.target.value)} />
+              </div>
+              <Button variant="outline" size="sm" onClick={handleReinitialiserCloture}>Reinitialiser la checklist</Button>
+            </div>
+
+            {clotureStats && (
+              <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+                <Card>
+                  <CardHeader><CardTitle>Progression</CardTitle></CardHeader>
+                  <CardContent><p className="text-2xl font-semibold">{clotureStats.progression}%</p></CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle>Etapes terminees</CardTitle></CardHeader>
+                  <CardContent><p className="text-2xl font-semibold">{clotureStats.nbFait} / {clotureStats.total}</p></CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle>Prochaine etape</CardTitle></CardHeader>
+                  <CardContent><p className="text-sm">{clotureStats.prochaineEtape ?? "—"}</p></CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle>Pret pour cloture</CardTitle></CardHeader>
+                  <CardContent>
+                    <p className={`text-2xl font-semibold ${clotureStats.pretPourCloture ? "text-emerald-400" : "text-orange-400"}`}>
+                      {clotureStats.pretPourCloture ? "Oui" : "Non"}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {etapesClotureError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees.</p>}
+            {etapesClotureLoading && <p className="text-muted-foreground">Chargement...</p>}
+
+            <div className="flex flex-col gap-2">
+              {(etapesCloture ?? []).map((e) => (
+                <Card key={e.id}>
+                  <CardContent className="flex items-center justify-between gap-3 pt-4">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {e.ordre}. {e.titre}
+                        {e.obligatoire && <span className="ml-2 text-xs text-orange-400">Obligatoire</span>}
+                      </p>
+                      {e.description && <p className="mt-1 text-xs text-muted-foreground">{e.description}</p>}
+                    </div>
+                    <select
+                      className="h-8 rounded-md border border-border bg-transparent px-2 text-xs"
+                      value={e.statut}
+                      onChange={(ev) => handleEtapeStatutChange(e.id, ev.target.value as EtapeClotureStatut)}
+                    >
+                      {Object.entries(CLOTURE_STATUT_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </>
         )}
