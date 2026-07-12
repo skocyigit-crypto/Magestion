@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "seed": "tsx src/scripts/seed.ts",
+    "seed-super-admin": "tsx src/scripts/seed-super-admin.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

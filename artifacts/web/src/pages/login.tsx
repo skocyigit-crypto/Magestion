@@ -21,7 +21,9 @@ export default function LoginPage() {
       const { token, user } = await login(email, password);
       setToken(token);
       setUser(user);
-      navigate("/dashboard");
+      // Platform owner (SUPER_ADMIN sans licence) : pas de donnees tenant a
+      // afficher, redirige vers la console cross-tenant dediee.
+      navigate(user.licenceId === null ? "/super-admin" : "/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de connexion");
     } finally {
