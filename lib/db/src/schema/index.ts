@@ -33,3 +33,4 @@ export * from "./employeeHabilitations.js";
 export * from "./declarationsTva.js";
 export * from "./chantierPhases.js";
 export * from "./clients.js";
+export * from "./fournisseurs.js";

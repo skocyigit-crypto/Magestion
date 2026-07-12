@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { montantTtc } from "@/lib/devis";
 import { listProjects } from "@/lib/projects";
+import { listFournisseurs } from "@/lib/fournisseurs";
 import {
   CATEGORIE_LABELS,
   NEXT_STATUTS,
@@ -32,6 +33,7 @@ export default function DepensesPage() {
     queryFn: () => listDepenses(showArchived),
   });
   const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
+  const { data: fournisseurs } = useQuery({ queryKey: ["fournisseurs"], queryFn: () => listFournisseurs() });
 
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -64,6 +66,7 @@ export default function DepensesPage() {
     setEditingId(depense.id);
     setForm({
       fournisseur: depense.fournisseur,
+      fournisseurId: depense.fournisseurId ?? undefined,
       objet: depense.objet,
       projectId: depense.projectId ?? undefined,
       montantHt: Number(depense.montantHt),
@@ -210,6 +213,23 @@ export default function DepensesPage() {
           <DialogTitle>{editingId ? "Modifier la depense" : "Nouvelle depense"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="fournisseurFiche">Fiche fournisseur (optionnel)</Label>
+            <select
+              id="fournisseurFiche"
+              className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+              value={form.fournisseurId ?? ""}
+              onChange={(e) => {
+                const selected = (fournisseurs ?? []).find((f) => f.id === e.target.value);
+                setForm({ ...form, fournisseurId: e.target.value || undefined, fournisseur: selected ? selected.nom : form.fournisseur });
+              }}
+            >
+              <option value="">— Fournisseur ponctuel (texte libre) —</option>
+              {(fournisseurs ?? []).map((f) => (
+                <option key={f.id} value={f.id}>{f.nom}</option>
+              ))}
+            </select>
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="fournisseur">Fournisseur</Label>
             <Input id="fournisseur" required value={form.fournisseur} onChange={(e) => setForm({ ...form, fournisseur: e.target.value })} />

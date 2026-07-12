@@ -6,6 +6,7 @@ export interface Commande {
   id: string;
   projectId: string | null;
   fournisseur: string;
+  fournisseurId: string | null;
   objet: string;
   statut: CommandeStatut;
   montantHt: string;
@@ -18,6 +19,7 @@ export interface Commande {
 
 export interface CommandeInput {
   fournisseur: string;
+  fournisseurId?: string;
   objet: string;
   projectId?: string;
   montantHt: number;

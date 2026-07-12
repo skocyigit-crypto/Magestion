@@ -10,6 +10,7 @@ commandesRouter.use(requireModuleAccess("commandes"));
 
 const commandeInputSchema = z.object({
   fournisseur: z.string().min(1).max(200),
+  fournisseurId: z.string().uuid().optional(),
   objet: z.string().min(1).max(500),
   projectId: z.string().uuid().optional(),
   montantHt: z.number().nonnegative().max(9999999999.99),
@@ -49,6 +50,7 @@ commandesRouter.post("/", async (req, res) => {
     .values({
       licenceId,
       fournisseur: parsed.data.fournisseur,
+      fournisseurId: parsed.data.fournisseurId,
       objet: parsed.data.objet,
       projectId: parsed.data.projectId,
       montantHt: parsed.data.montantHt.toString(),

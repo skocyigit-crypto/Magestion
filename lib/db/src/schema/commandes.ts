@@ -1,6 +1,7 @@
 import { pgTable, uuid, text, numeric, boolean, timestamp, date, pgEnum } from "drizzle-orm/pg-core";
 import { licencesTable } from "./licences.js";
 import { projectsTable } from "./projects.js";
+import { fournisseursTable } from "./fournisseurs.js";
 
 // Brouillon -> Envoyee -> Confirmee -> Livree.
 export const commandeStatutEnum = pgEnum("commande_statut", ["BROUILLON", "ENVOYEE", "CONFIRMEE", "LIVREE"]);
@@ -12,6 +13,7 @@ export const commandesTable = pgTable("commandes", {
     .references(() => licencesTable.id),
   projectId: uuid("project_id").references(() => projectsTable.id),
   fournisseur: text("fournisseur").notNull(),
+  fournisseurId: uuid("fournisseur_id").references(() => fournisseursTable.id),
   objet: text("objet").notNull(),
   statut: commandeStatutEnum("statut").notNull().default("BROUILLON"),
   montantHt: numeric("montant_ht", { precision: 12, scale: 2 }).notNull().default("0"),
