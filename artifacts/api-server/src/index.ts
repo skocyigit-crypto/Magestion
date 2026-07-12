@@ -31,6 +31,10 @@ import { usersRouter } from "./routes/users.js";
 import { parametresRouter } from "./routes/parametres.js";
 import { transactionsBancairesRouter } from "./routes/transactionsBancaires.js";
 import { rgpdRouter } from "./routes/rgpd.js";
+import { notesDeFraisRouter } from "./routes/notesDeFrais.js";
+import { locationsMaterielRouter } from "./routes/locationsMateriel.js";
+import { prorataRouter } from "./routes/prorata.js";
+import { analyticsCommercialRouter } from "./routes/analyticsCommercial.js";
 import { closeDb } from "@magestion/db";
 
 const app = express();
@@ -75,6 +79,10 @@ app.use("/api/users", usersRouter);
 app.use("/api/parametres", parametresRouter);
 app.use("/api/transactions-bancaires", transactionsBancairesRouter);
 app.use("/api/rgpd", rgpdRouter);
+app.use("/api/notes-de-frais", notesDeFraisRouter);
+app.use("/api/locations-materiel", locationsMaterielRouter);
+app.use("/api/prorata", prorataRouter);
+app.use("/api/analytics-commercial", analyticsCommercialRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Route introuvable" });

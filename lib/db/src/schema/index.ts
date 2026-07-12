@@ -23,3 +23,6 @@ export * from "./agenda.js";
 export * from "./relances.js";
 export * from "./transactionsBancaires.js";
 export * from "./journalRgpd.js";
+export * from "./notesDeFrais.js";
+export * from "./locationsMateriel.js";
+export * from "./prorata.js";
