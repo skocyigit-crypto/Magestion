@@ -23,6 +23,7 @@ import { STATUT_LABELS as COMMANDE_STATUT_LABELS, listCommandes } from "@/lib/co
 import { STATUT_LABELS as SITUATION_STATUT_LABELS, listSituations } from "@/lib/situations";
 import { listSousTraitants } from "@/lib/sousTraitants";
 import { ajouterCharge, ajouterParticipant, archiverCharge, getProrata, retirerParticipant } from "@/lib/prorata";
+import { getRetenueGarantie, libererRetenue } from "@/lib/retenuesGarantie";
 
 export default function ChantierDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -39,6 +40,7 @@ export default function ChantierDetailPage() {
   const { data: situationsList } = useQuery({ queryKey: ["situations", id], queryFn: () => listSituations(id) });
   const { data: sousTraitants } = useQuery({ queryKey: ["sous-traitants"], queryFn: () => listSousTraitants() });
   const { data: prorata, refetch: refetchProrata } = useQuery({ queryKey: ["prorata", id], queryFn: () => getProrata(id) });
+  const { data: retenueGarantie, refetch: refetchRetenue } = useQuery({ queryKey: ["retenue-garantie", id], queryFn: () => getRetenueGarantie(id) });
 
   const devisForProject = (devisList ?? []).filter((d) => d.projectId === id);
   const facturesForProject = (facturesList ?? []).filter((f) => f.projectId === id);
@@ -77,6 +79,22 @@ export default function ChantierDetailPage() {
   async function handleArchiverCharge(chargeId: string) {
     await archiverCharge(chargeId);
     await refetchProrata();
+  }
+
+  const [liberationForm, setLiberationForm] = useState({ montant: 0, dateLiberation: "" });
+  const [liberationError, setLiberationError] = useState<string | null>(null);
+
+  async function handleLiberer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!liberationForm.dateLiberation || liberationForm.montant <= 0) return;
+    setLiberationError(null);
+    try {
+      await libererRetenue(id, liberationForm);
+      setLiberationForm({ montant: 0, dateLiberation: "" });
+      await refetchRetenue();
+    } catch (err) {
+      setLiberationError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
+    }
   }
 
   function openEdit() {
@@ -362,6 +380,52 @@ export default function ChantierDetailPage() {
                 {" — "}Part par participant (repartition egale) : <span className="font-semibold">{prorata.partParParticipant.toLocaleString("fr-FR")} €</span>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <h2 className="mb-3 mt-6 text-lg font-semibold">Retenue de garantie</h2>
+        <Card className="mb-6">
+          <CardContent className="flex flex-col gap-4 pt-6">
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Total retenu (situations validees)</p>
+                <p className="text-lg font-semibold">{(retenueGarantie?.totalRetenue ?? 0).toLocaleString("fr-FR")} €</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Deja libere</p>
+                <p className="text-lg font-semibold">{(retenueGarantie?.totalLibere ?? 0).toLocaleString("fr-FR")} €</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Reste a liberer</p>
+                <p className="text-lg font-semibold text-orange-400">{(retenueGarantie?.resteALiberer ?? 0).toLocaleString("fr-FR")} €</p>
+              </div>
+            </div>
+
+            {(retenueGarantie?.liberations.length ?? 0) > 0 && (
+              <div className="flex flex-col gap-1">
+                {retenueGarantie!.liberations.map((l) => (
+                  <div key={l.id} className="flex justify-between text-sm text-muted-foreground">
+                    <span>{l.dateLiberation} — {l.notes || "Liberation"}</span>
+                    <span>{Number(l.montant).toLocaleString("fr-FR")} €</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(retenueGarantie?.resteALiberer ?? 0) > 0 && (
+              <form onSubmit={handleLiberer} className="flex flex-wrap items-end gap-2">
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs">Montant a liberer</Label>
+                  <Input className="h-9 w-32" type="number" min={0} value={liberationForm.montant} onChange={(e) => setLiberationForm({ ...liberationForm, montant: Number(e.target.value) })} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs">Date</Label>
+                  <Input className="h-9" type="date" value={liberationForm.dateLiberation} onChange={(e) => setLiberationForm({ ...liberationForm, dateLiberation: e.target.value })} />
+                </div>
+                <Button type="submit" size="sm">Enregistrer la liberation</Button>
+              </form>
+            )}
+            {liberationError && <p className="text-sm text-red-400">{liberationError}</p>}
           </CardContent>
         </Card>
       </div>
