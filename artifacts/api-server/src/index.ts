@@ -37,6 +37,7 @@ import { prorataRouter } from "./routes/prorata.js";
 import { analyticsCommercialRouter } from "./routes/analyticsCommercial.js";
 import { avoirsRouter } from "./routes/avoirs.js";
 import { retenuesGarantieRouter } from "./routes/retenuesGarantie.js";
+import { declarationsTvaRouter } from "./routes/declarationsTva.js";
 import { closeDb } from "@magestion/db";
 
 const app = express();
@@ -87,6 +88,7 @@ app.use("/api/prorata", prorataRouter);
 app.use("/api/analytics-commercial", analyticsCommercialRouter);
 app.use("/api/avoirs", avoirsRouter);
 app.use("/api/retenues-garantie", retenuesGarantieRouter);
+app.use("/api/declarations-tva", declarationsTvaRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Route introuvable" });

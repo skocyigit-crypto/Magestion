@@ -30,3 +30,4 @@ export * from "./lignes.js";
 export * from "./avoirs.js";
 export * from "./retenuesLiberations.js";
 export * from "./employeeHabilitations.js";
+export * from "./declarationsTva.js";
