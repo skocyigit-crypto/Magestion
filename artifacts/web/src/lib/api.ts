@@ -7,6 +7,7 @@ export interface CurrentUser {
   email: string;
   nom: string;
   role: "SUPER_ADMIN" | "COMMERCIAL" | "TERRAIN" | "COMPTABILITE";
+  licenceId: string | null;
 }
 
 export function getToken(): string | null {

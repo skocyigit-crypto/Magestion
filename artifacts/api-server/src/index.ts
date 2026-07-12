@@ -43,6 +43,7 @@ import { clientsRouter } from "./routes/clients.js";
 import { fournisseursRouter } from "./routes/fournisseurs.js";
 import { billingRouter } from "./routes/billing.js";
 import { stripeWebhookRouter } from "./routes/stripe-webhook.js";
+import { superAdminRouter } from "./routes/super-admin.js";
 import { closeDb } from "@magestion/db";
 
 const app = express();
@@ -104,6 +105,7 @@ app.use("/api/planning-chantier", chantierPlanningRouter);
 app.use("/api/clients", clientsRouter);
 app.use("/api/fournisseurs", fournisseursRouter);
 app.use("/api/billing", billingRouter);
+app.use("/api/super-admin", superAdminRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Route introuvable" });
