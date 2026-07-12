@@ -3,11 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Layout } from "@/components/layout";
 import { listProjects } from "@/lib/projects";
 import { listFactures } from "@/lib/factures";
-import { listDepenses } from "@/lib/depenses";
+import { CATEGORIE_LABELS, listDepenses, type DepenseCategorie } from "@/lib/depenses";
 import { listDevis, montantTtc } from "@/lib/devis";
 import { listRelancesAFaire } from "@/lib/relances";
+import { CHART_COLORS, GroupedBarChart, HorizontalBarChart } from "@/components/bar-chart";
 
 const fmtEuro = (n: number) => `${n.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} €`;
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export default function DashboardPage() {
   const { data: projects, isLoading: projectsLoading, isError: projectsError } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
@@ -45,6 +47,40 @@ export default function DashboardPage() {
   const tauxTransformation = devisClos > 0 ? Math.round((devisAcceptes / devisClos) * 100) : null;
 
   const relancesAFaire = (relances ?? []).length;
+
+  // CA mensuel (6 derniers mois) : facture vs encaisse, meme unite (€) -> un seul axe.
+  const moisLabels: string[] = [];
+  const factureParMois: number[] = [];
+  const encaisseParMois: number[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i);
+    const moisKey = `${d.getFullYear()}-${d.getMonth()}`;
+    moisLabels.push(d.toLocaleDateString("fr-FR", { month: "short" }));
+    const facturesDuMois = facturesEmises.filter((f) => {
+      const fd = new Date(f.createdAt);
+      return `${fd.getFullYear()}-${fd.getMonth()}` === moisKey;
+    });
+    factureParMois.push(round2(facturesDuMois.reduce((s, f) => s + montantTtc(f.montantHt, f.tauxTva), 0)));
+    const payeesDuMois = allFactures.filter((f) => {
+      if (f.statut !== "PAYEE" || !f.updatedAt) return false;
+      const pd = new Date(f.updatedAt);
+      return `${pd.getFullYear()}-${pd.getMonth()}` === moisKey;
+    });
+    encaisseParMois.push(round2(payeesDuMois.reduce((s, f) => s + montantTtc(f.montantHt, f.tauxTva), 0)));
+  }
+
+  // Depenses par categorie (actives), ordre fixe = ordre de l'enum (identite, pas magnitude).
+  const categories: DepenseCategorie[] = ["MATERIAUX", "MAIN_OEUVRE", "SOUS_TRAITANCE", "MATERIEL", "ADMINISTRATIF", "AUTRE"];
+  const depensesParCategorie = categories
+    .map((cat, i) => ({
+      label: CATEGORIE_LABELS[cat],
+      value: round2(allDepenses.filter((d) => d.categorie === cat).reduce((s, d) => s + montantTtc(d.montantHt, d.tauxTva), 0)),
+      color: CHART_COLORS[i],
+    }))
+    .filter((d) => d.value > 0)
+    .sort((a, b) => b.value - a.value);
 
   const kpis = [
     { label: "Chantiers actifs", value: String(allProjects.length) },
@@ -90,6 +126,33 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader><CardTitle>Chiffre d'affaires mensuel (6 derniers mois)</CardTitle></CardHeader>
+            <CardContent>
+              <GroupedBarChart
+                categories={moisLabels}
+                series={[
+                  { label: "Facture", color: "#3987e5", values: factureParMois },
+                  { label: "Encaisse", color: "#199e70", values: encaisseParMois },
+                ]}
+                formatValue={fmtEuro}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Depenses par categorie</CardTitle></CardHeader>
+            <CardContent>
+              {depensesParCategorie.length > 0 ? (
+                <HorizontalBarChart data={depensesParCategorie} formatValue={fmtEuro} />
+              ) : (
+                <p className="text-sm text-muted-foreground">Aucune depense enregistree.</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </Layout>
