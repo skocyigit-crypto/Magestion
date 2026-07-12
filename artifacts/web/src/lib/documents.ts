@@ -18,6 +18,7 @@ export interface DocumentItem {
   verrouillePar: string | null;
   hashSha256: string | null;
   classificationIa: boolean;
+  confidentiel: boolean;
   active: boolean;
   createdAt: string;
 }
@@ -30,7 +31,7 @@ const API_BASE = `${import.meta.env.VITE_API_URL ?? ""}/api`;
 
 export async function uploadDocument(
   file: File,
-  meta: { nom?: string; type?: DocumentType; dateExpiration?: string; entityType?: EntityType; entityId?: string },
+  meta: { nom?: string; type?: DocumentType; dateExpiration?: string; entityType?: EntityType; entityId?: string; confidentiel?: boolean },
 ) {
   const token = getToken();
   const form = new FormData();
@@ -40,6 +41,7 @@ export async function uploadDocument(
   if (meta.dateExpiration) form.append("dateExpiration", meta.dateExpiration);
   if (meta.entityType) form.append("entityType", meta.entityType);
   if (meta.entityId) form.append("entityId", meta.entityId);
+  if (meta.confidentiel) form.append("confidentiel", "true");
 
   const res = await fetch(`${API_BASE}/documents`, {
     method: "POST",
@@ -77,6 +79,7 @@ export interface DocumentUpdateInput {
   active?: boolean;
   entityType?: EntityType;
   entityId?: string;
+  confidentiel?: boolean;
 }
 
 export function updateDocument(id: string, input: DocumentUpdateInput) {
