@@ -31,6 +31,10 @@ export const documentsTable = pgTable("documents", {
   // true si le type/nom ont ete suggeres par l'IA (OCR) plutot que saisis
   // manuellement — affiche a titre informatif, jamais bloquant.
   classificationIa: boolean("classification_ia").notNull().default(false),
+  // Zone Privee : reserve aux roles SUPER_ADMIN/COMPTABILITE (voir routes/documents.ts).
+  // Un document confidentiel n'apparait pas dans la liste et ne peut pas etre
+  // telecharge/modifie par TERRAIN/COMMERCIAL, meme s'ils sont l'auteur de l'upload.
+  confidentiel: boolean("confidentiel").notNull().default(false),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -16,6 +16,13 @@ documentsRouter.use(requireModuleAccess("documents"));
 
 const MAX_SIZE = 20 * 1024 * 1024; // 20 Mo
 
+// Zone Privee : seuls SUPER_ADMIN et COMPTABILITE voient/manipulent les
+// documents marques confidentiel=true, quel que soit leur role d'ecriture
+// habituel sur le module documents (TERRAIN/COMMERCIAL en sont exclus).
+function canAccessConfidentiel(role: string): boolean {
+  return role === "SUPER_ADMIN" || role === "COMPTABILITE";
+}
+
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
     const licenceId = req.user?.licenceId;
@@ -80,7 +87,8 @@ documentsRouter.get("/", async (req, res) => {
     .select()
     .from(documentsTable)
     .where(and(eq(documentsTable.licenceId, licenceId), eq(documentsTable.active, !onlyInactive)));
-  res.json(rows);
+  const visible = canAccessConfidentiel(req.user!.role) ? rows : rows.filter((d) => !d.confidentiel);
+  res.json(visible);
 });
 
 documentsRouter.post("/", upload.single("file"), async (req, res) => {
@@ -99,6 +107,9 @@ documentsRouter.post("/", upload.single("file"), async (req, res) => {
       entityType: ENTITY_TYPE_ENUM.optional(),
       entityId: z.string().uuid().optional(),
       dateExpiration: z.string().optional(),
+      // multer transmet les champs texte du multipart en string ("true"/"false"),
+      // jamais en booleen natif — d'ou le preprocess plutot que z.boolean() seul.
+      confidentiel: z.preprocess((v) => v === "true" || v === true, z.boolean()).optional(),
     })
     .safeParse(req.body);
   if (!parsed.success) {
@@ -130,6 +141,7 @@ documentsRouter.post("/", upload.single("file"), async (req, res) => {
       mimeType: req.file.mimetype,
       dateExpiration: parsed.data.dateExpiration || suggested?.dateExpiration || undefined,
       classificationIa: !!suggested,
+      confidentiel: parsed.data.confidentiel ?? false,
     })
     .returning();
 
@@ -149,6 +161,10 @@ documentsRouter.get("/:id/download", async (req, res) => {
     res.status(404).json({ error: "Document introuvable" });
     return;
   }
+  if (doc.confidentiel && !canAccessConfidentiel(req.user!.role)) {
+    res.status(403).json({ error: "Document reserve a la Zone Privee" });
+    return;
+  }
 
   res.download(join(STORAGE_DIR, doc.cheminFichier), doc.nom);
 });
@@ -160,6 +176,7 @@ const documentUpdateSchema = z.object({
   entityId: z.string().uuid().optional(),
   dateExpiration: z.string().optional(),
   active: z.boolean().optional(),
+  confidentiel: z.boolean().optional(),
 });
 
 // Pas de DELETE : archivage uniquement via PATCH { active: false } (regle produit).
@@ -184,6 +201,10 @@ documentsRouter.patch("/:id", async (req, res) => {
     .limit(1);
   if (!existing) {
     res.status(404).json({ error: "Document introuvable" });
+    return;
+  }
+  if (existing.confidentiel && !canAccessConfidentiel(req.user!.role)) {
+    res.status(403).json({ error: "Document reserve a la Zone Privee" });
     return;
   }
   if (existing.verrouille) {
@@ -215,6 +236,10 @@ documentsRouter.post("/:id/verrouiller", async (req, res) => {
     .limit(1);
   if (!doc) {
     res.status(404).json({ error: "Document introuvable" });
+    return;
+  }
+  if (doc.confidentiel && !canAccessConfidentiel(req.user!.role)) {
+    res.status(403).json({ error: "Document reserve a la Zone Privee" });
     return;
   }
   if (doc.verrouille) {
@@ -252,6 +277,10 @@ documentsRouter.get("/:id/verifier-integrite", async (req, res) => {
     .limit(1);
   if (!doc) {
     res.status(404).json({ error: "Document introuvable" });
+    return;
+  }
+  if (doc.confidentiel && !canAccessConfidentiel(req.user!.role)) {
+    res.status(403).json({ error: "Document reserve a la Zone Privee" });
     return;
   }
   if (!doc.verrouille || !doc.hashSha256) {

@@ -68,6 +68,7 @@ export default function DocumentsPage() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [type, setType] = useState<DocumentType | "AUTO">("AUTO");
   const [dateExpiration, setDateExpiration] = useState("");
+  const [confidentiel, setConfidentiel] = useState(false);
   const [entityForm, setEntityForm] = useState<EntityForm>(EMPTY_ENTITY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,10 +76,11 @@ export default function DocumentsPage() {
   const [integriteResult, setIntegriteResult] = useState<{ id: string; intact: boolean } | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<{ nom: string; type: DocumentType; dateExpiration: string }>({
+  const [editForm, setEditForm] = useState<{ nom: string; type: DocumentType; dateExpiration: string; confidentiel: boolean }>({
     nom: "",
     type: "AUTRE",
     dateExpiration: "",
+    confidentiel: false,
   });
   const [editEntityForm, setEditEntityForm] = useState<EntityForm>(EMPTY_ENTITY);
   const [editSaving, setEditSaving] = useState(false);
@@ -115,11 +117,13 @@ export default function DocumentsPage() {
         dateExpiration: dateExpiration || undefined,
         entityType: entityForm.entityType,
         entityId: entityForm.entityId || undefined,
+        confidentiel,
       });
       await queryClient.invalidateQueries({ queryKey: ["documents"] });
       setIsUploadOpen(false);
       setDateExpiration("");
       setType("AUTO");
+      setConfidentiel(false);
       setEntityForm(EMPTY_ENTITY);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
@@ -142,7 +146,7 @@ export default function DocumentsPage() {
 
   function openEdit(d: DocumentItem) {
     setEditingId(d.id);
-    setEditForm({ nom: d.nom, type: d.type, dateExpiration: d.dateExpiration ?? "" });
+    setEditForm({ nom: d.nom, type: d.type, dateExpiration: d.dateExpiration ?? "", confidentiel: d.confidentiel });
     setEditEntityForm({ entityType: d.entityType, entityId: d.entityId ?? "" });
     setEditError(null);
   }
@@ -157,6 +161,7 @@ export default function DocumentsPage() {
         nom: editForm.nom,
         type: editForm.type,
         entityType: editEntityForm.entityType,
+        confidentiel: editForm.confidentiel,
         ...(editEntityForm.entityId ? { entityId: editEntityForm.entityId } : {}),
         ...(editForm.dateExpiration ? { dateExpiration: editForm.dateExpiration } : {}),
       });
@@ -241,6 +246,7 @@ export default function DocumentsPage() {
                     <td className="px-4 py-2">
                       {d.nom}
                       {d.verrouille && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground" title="Verrouille (WORM) — non modifiable">🔒</span>}
+                      {d.confidentiel && <span className="ml-2 rounded bg-purple-950/40 px-1.5 py-0.5 text-xs text-purple-400" title="Zone Privee — reserve a SUPER_ADMIN/COMPTABILITE">Zone Privee</span>}
                       {d.classificationIa && <span className="ml-2 rounded bg-blue-950/40 px-1.5 py-0.5 text-xs text-blue-400" title="Classe automatiquement par IA">IA</span>}
                       {integriteResult?.id === d.id && (
                         <span className={`ml-2 text-xs ${integriteResult.intact ? "text-emerald-400" : "text-red-400"}`}>
@@ -335,6 +341,10 @@ export default function DocumentsPage() {
             <Label htmlFor="dateExpiration">Date d'expiration (optionnel)</Label>
             <Input id="dateExpiration" type="date" value={dateExpiration} onChange={(e) => setDateExpiration(e.target.value)} />
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={confidentiel} onChange={(e) => setConfidentiel(e.target.checked)} />
+            Zone Privee (reserve a SUPER_ADMIN/COMPTABILITE — masque aux autres roles)
+          </label>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setIsUploadOpen(false)}>Annuler</Button>
@@ -408,6 +418,14 @@ export default function DocumentsPage() {
               onChange={(e) => setEditForm({ ...editForm, dateExpiration: e.target.value })}
             />
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={editForm.confidentiel}
+              onChange={(e) => setEditForm({ ...editForm, confidentiel: e.target.checked })}
+            />
+            Zone Privee (reserve a SUPER_ADMIN/COMPTABILITE — masque aux autres roles)
+          </label>
           {editError && <p className="text-sm text-red-400">{editError}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setEditingId(null)}>Annuler</Button>
