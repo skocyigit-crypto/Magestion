@@ -35,3 +35,4 @@ export * from "./chantierPhases.js";
 export * from "./clients.js";
 export * from "./fournisseurs.js";
 export * from "./stripeEvents.js";
+export * from "./taches.js";

@@ -43,6 +43,7 @@ const NAV_GROUPS: (NavLink | NavGroup)[] = [
     label: "RH & Chantier",
     items: [
       { href: "/equipe", label: "Equipe" },
+      { href: "/taches", label: "Taches" },
       { href: "/pointage", label: "Pointage" },
       { href: "/planning-personnel", label: "Planning" },
       { href: "/securite", label: "Securite" },
