@@ -36,9 +36,11 @@ export function updateStockItem(id: string, input: StockItemUpdateInput) {
   return apiFetch<StockItem>(`/stock/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
-export function createMouvement(stockItemId: string, type: "ENTREE" | "SORTIE", quantite: number, motif?: string) {
+// prixUnitaireHt (ENTREE uniquement) : prix d'achat de ce lot, recalcule le
+// CUMP (cout unitaire moyen pondere) de l'article — omis, le CUMP ne change pas.
+export function createMouvement(stockItemId: string, type: "ENTREE" | "SORTIE", quantite: number, motif?: string, prixUnitaireHt?: number) {
   return apiFetch(`/stock/${stockItemId}/mouvements`, {
     method: "POST",
-    body: JSON.stringify({ type, quantite, motif }),
+    body: JSON.stringify({ type, quantite, motif, prixUnitaireHt }),
   });
 }

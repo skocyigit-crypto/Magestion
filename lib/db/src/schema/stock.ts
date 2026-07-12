@@ -34,6 +34,10 @@ export const stockMovementsTable = pgTable("stock_movements", {
   projectId: uuid("project_id").references(() => projectsTable.id),
   type: mouvementTypeEnum("type").notNull(),
   quantite: numeric("quantite", { precision: 10, scale: 2 }).notNull(),
+  // Prix d'achat de CE lot entrant (ENTREE uniquement) — sert a recalculer le
+  // CUMP (cout unitaire moyen pondere) de l'article, voir routes/stock.ts.
+  // Null pour une SORTIE (elle consomme au CUMP courant, ne le modifie pas).
+  prixUnitaireHt: numeric("prix_unitaire_ht", { precision: 10, scale: 2 }),
   motif: text("motif"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
