@@ -18,7 +18,7 @@ export async function recordJournalEntry(params: {
   journalCode: "AC" | "VE" | "OD";
   pieceRef: string;
   ecritureLib: string;
-  sourceType: "FACTURE" | "DEPENSE";
+  sourceType: "FACTURE" | "DEPENSE" | "AVOIR";
   sourceId: string;
   lines: EntryLine[];
 }) {
@@ -83,6 +83,35 @@ export async function recordFactureEmission(params: {
       { compteNum: "411", compteLib: "Clients", debit: montantTtc },
       { compteNum: "706", compteLib: "Prestations de services / Travaux", credit: params.montantHt },
       ...(montantTva > 0 ? [{ compteNum: "44571", compteLib: "TVA collectee", credit: montantTva }] : []),
+    ],
+  });
+}
+
+// Genere l'ecriture de vente (VE) a l'emission d'un avoir — inverse exact de
+// recordFactureEmission (credite 411 Clients au lieu de le debiter, etc.) :
+// un avoir reduit ce que doit le client et annule le CA/TVA deja constates.
+export async function recordAvoirEmission(params: {
+  licenceId: string;
+  avoirId: string;
+  numero: string;
+  client: string;
+  montantHt: number;
+  tauxTva: number;
+}) {
+  const montantTva = params.montantHt * (params.tauxTva / 100);
+  const montantTtc = params.montantHt + montantTva;
+
+  await recordJournalEntry({
+    licenceId: params.licenceId,
+    journalCode: "VE",
+    pieceRef: params.numero,
+    ecritureLib: `Avoir ${params.numero} — ${params.client}`,
+    sourceType: "AVOIR",
+    sourceId: params.avoirId,
+    lines: [
+      { compteNum: "411", compteLib: "Clients", credit: montantTtc },
+      { compteNum: "706", compteLib: "Prestations de services / Travaux", debit: params.montantHt },
+      ...(montantTva > 0 ? [{ compteNum: "44571", compteLib: "TVA collectee", debit: montantTva }] : []),
     ],
   });
 }

@@ -35,6 +35,7 @@ import { notesDeFraisRouter } from "./routes/notesDeFrais.js";
 import { locationsMaterielRouter } from "./routes/locationsMateriel.js";
 import { prorataRouter } from "./routes/prorata.js";
 import { analyticsCommercialRouter } from "./routes/analyticsCommercial.js";
+import { avoirsRouter } from "./routes/avoirs.js";
 import { closeDb } from "@magestion/db";
 
 const app = express();
@@ -83,6 +84,7 @@ app.use("/api/notes-de-frais", notesDeFraisRouter);
 app.use("/api/locations-materiel", locationsMaterielRouter);
 app.use("/api/prorata", prorataRouter);
 app.use("/api/analytics-commercial", analyticsCommercialRouter);
+app.use("/api/avoirs", avoirsRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Route introuvable" });

@@ -27,3 +27,4 @@ export * from "./notesDeFrais.js";
 export * from "./locationsMateriel.js";
 export * from "./prorata.js";
 export * from "./lignes.js";
+export * from "./avoirs.js";

@@ -42,7 +42,7 @@ export interface DocumentPdfLigne {
 }
 
 interface DocumentPdfData {
-  type: "DEVIS" | "FACTURE";
+  type: "DEVIS" | "FACTURE" | "AVOIR";
   numero: string;
   dateEmission: Date;
   dateEcheance?: string | null;
@@ -94,7 +94,8 @@ function drawDocument(doc: PDFKit.PDFDocument, data: DocumentPdfData) {
   // en haut a droite, hauteur jusqu'a 45+60=105).
   if (data.licence.logoAbsolutePath) doc.y = Math.max(doc.y, 115);
   doc.moveDown(1.5);
-  doc.fontSize(20).font("Helvetica-Bold").text(`${data.type === "DEVIS" ? "DEVIS" : "FACTURE"} N° ${data.numero}`, { align: "right" });
+  const titre = data.type === "DEVIS" ? "DEVIS" : data.type === "AVOIR" ? "AVOIR" : "FACTURE";
+  doc.fontSize(20).font("Helvetica-Bold").text(`${titre} N° ${data.numero}`, { align: "right" });
   doc.fontSize(10).font("Helvetica").text(`Date d'emission : ${fmtDate(data.dateEmission)}`, { align: "right" });
   if (data.dateEcheance) doc.text(`Date d'echeance : ${fmtDate(data.dateEcheance)}`, { align: "right" });
 
@@ -172,6 +173,8 @@ function drawDocument(doc: PDFKit.PDFDocument, data: DocumentPdfData) {
   const mentionsY = 720;
   if (data.type === "DEVIS") {
     doc.text("Devis valable 30 jours a compter de la date d'emission. Bon pour accord (date, signature et cachet) :", 50, mentionsY, { width: 500 });
+  } else if (data.type === "AVOIR") {
+    doc.text("Avoir a valoir sur les prochaines factures ou a rembourser au client, selon accord.", 50, mentionsY, { width: 500 });
   } else {
     doc.text(
       "En cas de retard de paiement, une penalite egale a 3 fois le taux d'interet legal sera appliquee, ainsi qu'une indemnite forfaitaire de 40 € pour frais de recouvrement (art. L441-10 et D441-5 du Code de commerce). Pas d'escompte pour paiement anticipe.",

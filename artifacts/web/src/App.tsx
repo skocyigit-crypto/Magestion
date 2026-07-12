@@ -14,6 +14,7 @@ const DevisPage = lazy(() => import("@/pages/devis/index"));
 const DevisDetailPage = lazy(() => import("@/pages/devis/detail"));
 const FacturesPage = lazy(() => import("@/pages/factures/index"));
 const FactureDetailPage = lazy(() => import("@/pages/factures/detail"));
+const AvoirsPage = lazy(() => import("@/pages/avoirs/index"));
 const DepensesPage = lazy(() => import("@/pages/depenses/index"));
 const CommandesPage = lazy(() => import("@/pages/commandes/index"));
 const SituationsPage = lazy(() => import("@/pages/situations/index"));
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/devis/:id" component={DevisDetailPage} />
         <Route path="/factures" component={FacturesPage} />
         <Route path="/factures/:id" component={FactureDetailPage} />
+        <Route path="/avoirs" component={AvoirsPage} />
         <Route path="/depenses" component={DepensesPage} />
         <Route path="/commandes" component={CommandesPage} />
         <Route path="/situations" component={SituationsPage} />
