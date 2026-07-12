@@ -7,6 +7,7 @@ export interface Depense {
   id: string;
   projectId: string | null;
   fournisseur: string;
+  fournisseurId: string | null;
   categorie: DepenseCategorie;
   objet: string;
   statut: DepenseStatut;
@@ -22,6 +23,7 @@ export interface Depense {
 
 export interface DepenseInput {
   fournisseur: string;
+  fournisseurId?: string;
   objet: string;
   projectId?: string;
   categorie?: DepenseCategorie;

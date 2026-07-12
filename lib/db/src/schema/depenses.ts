@@ -1,6 +1,7 @@
 import { pgTable, uuid, text, numeric, boolean, timestamp, date, pgEnum } from "drizzle-orm/pg-core";
 import { licencesTable } from "./licences.js";
 import { projectsTable } from "./projects.js";
+import { fournisseursTable } from "./fournisseurs.js";
 
 export const depenseCategorieEnum = pgEnum("depense_categorie", [
   "MATERIAUX",
@@ -21,6 +22,7 @@ export const depensesTable = pgTable("depenses", {
     .references(() => licencesTable.id),
   projectId: uuid("project_id").references(() => projectsTable.id),
   fournisseur: text("fournisseur").notNull(),
+  fournisseurId: uuid("fournisseur_id").references(() => fournisseursTable.id),
   categorie: depenseCategorieEnum("categorie").notNull().default("AUTRE"),
   objet: text("objet").notNull(),
   statut: depenseStatutEnum("statut").notNull().default("A_VALIDER"),
