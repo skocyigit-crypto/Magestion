@@ -29,6 +29,7 @@ const NAV_GROUPS: (NavLink | NavGroup)[] = [
     label: "Finance",
     items: [
       { href: "/factures", label: "Factures" },
+      { href: "/avoirs", label: "Avoirs" },
       { href: "/depenses", label: "Depenses" },
       { href: "/commandes", label: "Commandes" },
       { href: "/situations", label: "Situations" },

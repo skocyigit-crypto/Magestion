@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "wouter";
+import { Link, useParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -162,6 +162,11 @@ export default function FactureDetailPage() {
             {facture.statut === "BROUILLON" && <Button onClick={() => handleTransition("ENVOYEE")}>Envoyer</Button>}
             {(facture.statut === "ENVOYEE" || facture.statut === "EN_RETARD") && (
               <Button onClick={() => handleTransition("PAYEE")}>Marquer payee</Button>
+            )}
+            {facture.statut !== "BROUILLON" && (
+              <Link href={`/avoirs?factureId=${facture.id}`}>
+                <Button variant="outline">Creer un avoir</Button>
+              </Link>
             )}
           </div>
         </div>
