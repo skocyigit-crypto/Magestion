@@ -68,13 +68,32 @@ export default function ProspectsPage() {
       setIsOpen(false);
       setForm(EMPTY_FORM);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de la creation");
+      const message = err instanceof Error ? err.message : "Erreur lors de la creation";
+      // Doublon detecte (409) : proposer de creer quand meme plutot que bloquer.
+      if (message.includes("existe deja") && confirm(`${message}\n\nCreer quand meme ?`)) {
+        try {
+          await createProspect(form, true);
+          await queryClient.invalidateQueries({ queryKey: ["prospects"] });
+          setIsOpen(false);
+          setForm(EMPTY_FORM);
+          return;
+        } catch (err2) {
+          setError(err2 instanceof Error ? err2.message : "Erreur lors de la creation");
+          return;
+        }
+      }
+      setError(message);
     } finally {
       setSaving(false);
     }
   }
 
   async function moveToStage(prospectId: string, statut: ProspectStatut) {
+    // PERDU exige un motif — gere uniquement depuis la fiche detail (dialog dediee).
+    if (statut === "PERDU") {
+      alert("Renseignez le motif de perte depuis la fiche du prospect.");
+      return;
+    }
     await updateProspect(prospectId, { statut });
     await queryClient.invalidateQueries({ queryKey: ["prospects"] });
   }

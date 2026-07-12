@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,17 +9,21 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   PIPELINE_STAGES,
+  RAISON_PERTE_LABELS,
   STATUT_LABELS,
   URGENCE_LABELS,
+  convertirEnDevis,
   getProspect,
   updateProspect,
   type ProspectInput,
   type ProspectStatut,
   type ProspectUrgence,
+  type RaisonPerte,
 } from "@/lib/prospects";
 
 export default function ProspectDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { data: prospect, isLoading, isError } = useQuery({
     queryKey: ["prospects", id],
@@ -30,6 +34,11 @@ export default function ProspectDetailPage() {
   const [form, setForm] = useState<ProspectInput>({ nom: "" });
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  const [isPerduOpen, setIsPerduOpen] = useState(false);
+  const [raisonPerte, setRaisonPerte] = useState<RaisonPerte>("PRIX");
+  const [raisonPerteDetail, setRaisonPerteDetail] = useState("");
+  const [converting, setConverting] = useState(false);
 
   function openEdit() {
     if (!prospect) return;
@@ -66,9 +75,32 @@ export default function ProspectDetailPage() {
   }
 
   async function handleStatutChange(statut: ProspectStatut) {
+    if (statut === "PERDU") {
+      setIsPerduOpen(true);
+      return;
+    }
     await updateProspect(id, { statut });
     await queryClient.invalidateQueries({ queryKey: ["prospects", id] });
     await queryClient.invalidateQueries({ queryKey: ["prospects"] });
+  }
+
+  async function handleConfirmPerdu(e: React.FormEvent) {
+    e.preventDefault();
+    await updateProspect(id, { statut: "PERDU", raisonPerte, raisonPerteDetail: raisonPerteDetail || undefined });
+    await queryClient.invalidateQueries({ queryKey: ["prospects", id] });
+    await queryClient.invalidateQueries({ queryKey: ["prospects"] });
+    setIsPerduOpen(false);
+    setRaisonPerteDetail("");
+  }
+
+  async function handleConvertirDevis() {
+    setConverting(true);
+    try {
+      const devis = await convertirEnDevis(id);
+      navigate(`/devis/${devis.id}`);
+    } finally {
+      setConverting(false);
+    }
   }
 
   // Pas de suppression : archivage reversible uniquement (regle produit).
@@ -93,6 +125,7 @@ export default function ProspectDetailPage() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={openEdit}>Modifier</Button>
+            <Button onClick={handleConvertirDevis} disabled={converting}>{converting ? "Creation..." : "Creer un devis"}</Button>
             <Button variant="outline" onClick={handleToggleActive}>
               {prospect.active ? "Archiver" : "Reactiver"}
             </Button>
@@ -143,7 +176,51 @@ export default function ProspectDetailPage() {
             <CardContent><p className="text-sm whitespace-pre-wrap">{prospect.notes}</p></CardContent>
           </Card>
         )}
+
+        {prospect.raisonPerte && (
+          <Card className="mt-4 border-red-900/50">
+            <CardHeader><CardTitle>Analyse de la perte</CardTitle></CardHeader>
+            <CardContent className="text-sm">
+              <p>Motif : <span className="font-medium">{RAISON_PERTE_LABELS[prospect.raisonPerte]}</span></p>
+              {prospect.raisonPerteDetail && <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{prospect.raisonPerteDetail}</p>}
+            </CardContent>
+          </Card>
+        )}
       </div>
+
+      <Dialog open={isPerduOpen} onClose={() => setIsPerduOpen(false)}>
+        <DialogHeader>
+          <DialogTitle>Marquer ce prospect comme perdu</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleConfirmPerdu} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="raisonPerte">Motif</Label>
+            <select
+              id="raisonPerte"
+              className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+              value={raisonPerte}
+              onChange={(e) => setRaisonPerte(e.target.value as RaisonPerte)}
+            >
+              {Object.entries(RAISON_PERTE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="raisonPerteDetail">Detail (optionnel)</Label>
+            <textarea
+              id="raisonPerteDetail"
+              className="min-h-16 rounded-md border border-border bg-transparent px-3 py-2 text-sm"
+              value={raisonPerteDetail}
+              onChange={(e) => setRaisonPerteDetail(e.target.value)}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setIsPerduOpen(false)}>Annuler</Button>
+            <Button type="submit">Confirmer</Button>
+          </div>
+        </form>
+      </Dialog>
 
       <Dialog open={isEditOpen} onClose={() => setIsEditOpen(false)}>
         <DialogHeader>
