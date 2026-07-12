@@ -17,6 +17,9 @@ export interface Prospect {
   statut: ProspectStatut;
   score: number;
   notes: string | null;
+  consentementRgpd: boolean;
+  consentementDate: string | null;
+  anonymise: boolean;
   active: boolean;
   createdAt: string;
   updatedAt: string;

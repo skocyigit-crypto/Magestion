@@ -33,6 +33,8 @@ export const employeesTable = pgTable("employees", {
   tauxHoraire: numeric("taux_horaire", { precision: 8, scale: 2 }).notNull().default("0"),
   couleur: varchar("couleur", { length: 7 }).notNull().default("#F59E0B"),
   statut: employeeStatutEnum("statut").notNull().default("ABSENT"),
+  // Irreversible (droit a l'effacement RGPD) — voir routes/rgpd.ts.
+  anonymise: boolean("anonymise").notNull().default(false),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

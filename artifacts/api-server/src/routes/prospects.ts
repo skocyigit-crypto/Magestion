@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { db, prospectsTable } from "@magestion/db";
+import { db, prospectsTable, journalRgpdTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
 import { computeLeadScore } from "../lib/leadScoring.js";
@@ -28,6 +28,7 @@ const prospectInputSchema = z.object({
 const prospectUpdateSchema = prospectInputSchema.partial().extend({
   statut: statutEnum.optional(),
   active: z.boolean().optional(),
+  consentementRgpd: z.boolean().optional(),
 });
 
 // GET /prospects?onlyInactive=true -> corbeille (archives), sinon liste active par defaut
@@ -117,7 +118,7 @@ prospectsRouter.patch("/:id", async (req, res) => {
     return;
   }
 
-  const { budgetEstime, distanceKm, urgence, ...rest } = parsed.data;
+  const { budgetEstime, distanceKm, urgence, consentementRgpd, ...rest } = parsed.data;
   // Recalcul du score si l'un des facteurs change (budget/urgence/distance).
   const nextBudget = budgetEstime ?? Number(existing.budgetEstime);
   const nextUrgence = urgence ?? existing.urgence;
@@ -131,11 +132,25 @@ prospectsRouter.patch("/:id", async (req, res) => {
       ...(budgetEstime !== undefined ? { budgetEstime: budgetEstime.toString() } : {}),
       ...(distanceKm !== undefined ? { distanceKm: distanceKm.toString() } : {}),
       ...(urgence !== undefined ? { urgence } : {}),
+      ...(consentementRgpd !== undefined ? { consentementRgpd, consentementDate: new Date() } : {}),
       score,
       updatedAt: new Date(),
     })
     .where(and(eq(prospectsTable.id, req.params.id), eq(prospectsTable.licenceId, licenceId)))
     .returning();
+
+  // Le consentement (RGPD art. 7 : preuve du consentement) est journalise
+  // separement du reste des modifications, meme regroupe dans un seul PATCH.
+  if (consentementRgpd !== undefined) {
+    await db.insert(journalRgpdTable).values({
+      licenceId,
+      action: "CONSENTEMENT",
+      entityType: "PROSPECT",
+      entityId: updated.id,
+      effectuePar: req.user!.sub,
+      detail: consentementRgpd ? "Consentement accorde" : "Consentement retire",
+    });
+  }
 
   res.json(updated);
 });
