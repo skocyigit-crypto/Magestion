@@ -36,6 +36,9 @@ const ImportIaPage = lazy(() => import("@/pages/import-ia/index"));
 const UtilisateursPage = lazy(() => import("@/pages/utilisateurs/index"));
 const ParametresPage = lazy(() => import("@/pages/parametres/index"));
 const RgpdPage = lazy(() => import("@/pages/rgpd/index"));
+const NotesDeFraisPage = lazy(() => import("@/pages/notes-de-frais/index"));
+const LocationsMaterielPage = lazy(() => import("@/pages/locations-materiel/index"));
+const AnalyticsCommercialPage = lazy(() => import("@/pages/analytics-commercial/index"));
 
 export default function App() {
   return (
@@ -75,6 +78,9 @@ export default function App() {
         <Route path="/utilisateurs" component={UtilisateursPage} />
         <Route path="/parametres" component={ParametresPage} />
         <Route path="/rgpd" component={RgpdPage} />
+        <Route path="/notes-de-frais" component={NotesDeFraisPage} />
+        <Route path="/locations-materiel" component={LocationsMaterielPage} />
+        <Route path="/analytics-commercial" component={AnalyticsCommercialPage} />
         <Route>404 — Page introuvable</Route>
       </Switch>
     </Suspense>

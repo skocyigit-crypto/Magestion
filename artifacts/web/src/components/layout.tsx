@@ -22,6 +22,7 @@ const NAV_GROUPS: (NavLink | NavGroup)[] = [
       { href: "/devis", label: "Devis" },
       { href: "/agenda-commercial", label: "Agenda commercial" },
       { href: "/relances", label: "Relances" },
+      { href: "/analytics-commercial", label: "Performance commerciale" },
     ],
   },
   {
@@ -42,6 +43,7 @@ const NAV_GROUPS: (NavLink | NavGroup)[] = [
       { href: "/pointage", label: "Pointage" },
       { href: "/planning-personnel", label: "Planning" },
       { href: "/securite", label: "Securite" },
+      { href: "/notes-de-frais", label: "Notes de frais" },
     ],
   },
   {
@@ -53,6 +55,7 @@ const NAV_GROUPS: (NavLink | NavGroup)[] = [
       { href: "/stock", label: "Stock" },
       { href: "/documents", label: "Documents" },
       { href: "/vehicules", label: "Vehicules" },
+      { href: "/locations-materiel", label: "Locations de materiel" },
       { href: "/import-ia", label: "Import IA" },
     ],
   },

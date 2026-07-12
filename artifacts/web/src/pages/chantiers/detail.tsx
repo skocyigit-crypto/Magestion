@@ -21,6 +21,8 @@ import { FACTURE_STATUT_LABELS, listFactures } from "@/lib/factures";
 import { STATUT_LABELS as DEPENSE_STATUT_LABELS, listDepenses } from "@/lib/depenses";
 import { STATUT_LABELS as COMMANDE_STATUT_LABELS, listCommandes } from "@/lib/commandes";
 import { STATUT_LABELS as SITUATION_STATUT_LABELS, listSituations } from "@/lib/situations";
+import { listSousTraitants } from "@/lib/sousTraitants";
+import { ajouterCharge, ajouterParticipant, archiverCharge, getProrata, retirerParticipant } from "@/lib/prorata";
 
 export default function ChantierDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -35,6 +37,8 @@ export default function ChantierDetailPage() {
   const { data: depensesList } = useQuery({ queryKey: ["depenses"], queryFn: () => listDepenses() });
   const { data: commandesList } = useQuery({ queryKey: ["commandes"], queryFn: () => listCommandes() });
   const { data: situationsList } = useQuery({ queryKey: ["situations", id], queryFn: () => listSituations(id) });
+  const { data: sousTraitants } = useQuery({ queryKey: ["sous-traitants"], queryFn: () => listSousTraitants() });
+  const { data: prorata, refetch: refetchProrata } = useQuery({ queryKey: ["prorata", id], queryFn: () => getProrata(id) });
 
   const devisForProject = (devisList ?? []).filter((d) => d.projectId === id);
   const facturesForProject = (facturesList ?? []).filter((f) => f.projectId === id);
@@ -46,6 +50,34 @@ export default function ChantierDetailPage() {
   const [form, setForm] = useState<ProjectInput>({ nom: "", client: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [nouveauParticipantId, setNouveauParticipantId] = useState("");
+  const [nouvelleCharge, setNouvelleCharge] = useState({ libelle: "", montantHt: 0, dateOperation: "" });
+
+  async function handleAjouterParticipant() {
+    if (!nouveauParticipantId) return;
+    await ajouterParticipant(id, nouveauParticipantId);
+    setNouveauParticipantId("");
+    await refetchProrata();
+  }
+
+  async function handleRetirerParticipant(lienId: string) {
+    await retirerParticipant(lienId);
+    await refetchProrata();
+  }
+
+  async function handleAjouterCharge(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nouvelleCharge.libelle || !nouvelleCharge.dateOperation) return;
+    await ajouterCharge(id, nouvelleCharge);
+    setNouvelleCharge({ libelle: "", montantHt: 0, dateOperation: "" });
+    await refetchProrata();
+  }
+
+  async function handleArchiverCharge(chargeId: string) {
+    await archiverCharge(chargeId);
+    await refetchProrata();
+  }
 
   function openEdit() {
     if (!project) return;
@@ -148,6 +180,50 @@ export default function ChantierDetailPage() {
           </CardContent>
         </Card>
 
+        {(() => {
+          const budget = Number(project.budgetEstimeHt);
+          // "Realise" = depenses + commandes engagees sur ce chantier (HT, hors
+          // brouillons/annulations implicites — toutes les lignes actives
+          // rattachees comptent des l'engagement, pas seulement au paiement,
+          // pour un suivi budgetaire utile en cours de chantier).
+          const realiseDepenses = depensesForProject.reduce((s, d) => s + Number(d.montantHt), 0);
+          const realiseCommandes = commandesForProject.reduce((s, c) => s + Number(c.montantHt), 0);
+          const realise = realiseDepenses + realiseCommandes;
+          const pourcentage = budget > 0 ? Math.round((realise / budget) * 100) : null;
+          const depassement = budget > 0 && realise > budget;
+          return (
+            <Card className="mb-6">
+              <CardHeader><CardTitle>Budget vs realise</CardTitle></CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Budget estime HT</p>
+                    <p className="text-lg font-semibold">{budget.toLocaleString("fr-FR")} €</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Realise HT (depenses + commandes)</p>
+                    <p className={`text-lg font-semibold ${depassement ? "text-red-400" : ""}`}>{realise.toLocaleString("fr-FR")} €</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Reste disponible</p>
+                    <p className={`text-lg font-semibold ${depassement ? "text-red-400" : "text-emerald-400"}`}>{(budget - realise).toLocaleString("fr-FR")} €</p>
+                  </div>
+                </div>
+                {budget > 0 && (
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full ${depassement ? "bg-red-500" : "bg-primary"}`}
+                      style={{ width: `${Math.min(pourcentage ?? 0, 100)}%` }}
+                    />
+                  </div>
+                )}
+                {budget === 0 && <p className="text-xs text-muted-foreground">Aucun budget estime renseigne — modifier le chantier pour en definir un.</p>}
+                {depassement && <p className="text-sm text-red-400">Budget depasse de {(realise - budget).toLocaleString("fr-FR")} € ({pourcentage}%).</p>}
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         <h2 className="mb-3 text-lg font-semibold">Suivi financier du chantier</h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Card>
@@ -218,6 +294,76 @@ export default function ChantierDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        <h2 className="mb-3 mt-6 text-lg font-semibold">Compte prorata (charges communes de chantier)</h2>
+        <Card className="mb-6">
+          <CardContent className="flex flex-col gap-4 pt-6">
+            <div>
+              <p className="mb-2 text-sm font-medium">Sous-traitants participants ({prorata?.participants.length ?? 0})</p>
+              <div className="flex flex-wrap gap-2">
+                {(prorata?.participants ?? []).map((p) => (
+                  <span key={p.lienId} className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs">
+                    {p.raisonSociale}
+                    <button type="button" onClick={() => handleRetirerParticipant(p.lienId)} className="text-muted-foreground hover:text-red-400">✕</button>
+                  </span>
+                ))}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <select
+                  className="h-9 rounded-md border border-border bg-transparent px-2 text-sm"
+                  value={nouveauParticipantId}
+                  onChange={(e) => setNouveauParticipantId(e.target.value)}
+                >
+                  <option value="">Ajouter un sous-traitant...</option>
+                  {(sousTraitants ?? [])
+                    .filter((s) => !(prorata?.participants ?? []).some((p) => p.sousTraitantId === s.id))
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>{s.raisonSociale}</option>
+                    ))}
+                </select>
+                <Button size="sm" variant="outline" onClick={handleAjouterParticipant} disabled={!nouveauParticipantId}>Ajouter</Button>
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium">Charges communes ({prorata?.charges.length ?? 0})</p>
+              <div className="flex flex-col gap-1">
+                {(prorata?.charges ?? []).map((c) => (
+                  <div key={c.id} className="flex items-center justify-between text-sm">
+                    <span>{c.dateOperation} — {c.libelle}</span>
+                    <div className="flex items-center gap-2">
+                      <span>{Number(c.montantHt).toLocaleString("fr-FR")} € HT</span>
+                      <button type="button" onClick={() => handleArchiverCharge(c.id)} className="text-muted-foreground hover:text-red-400" title="Archiver">✕</button>
+                    </div>
+                  </div>
+                ))}
+                {(prorata?.charges.length ?? 0) === 0 && <p className="text-sm text-muted-foreground">Aucune charge commune.</p>}
+              </div>
+              <form onSubmit={handleAjouterCharge} className="mt-3 flex flex-wrap items-end gap-2">
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs">Libelle</Label>
+                  <Input className="h-9 w-40" value={nouvelleCharge.libelle} onChange={(e) => setNouvelleCharge({ ...nouvelleCharge, libelle: e.target.value })} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs">Montant HT</Label>
+                  <Input className="h-9 w-28" type="number" min={0} value={nouvelleCharge.montantHt} onChange={(e) => setNouvelleCharge({ ...nouvelleCharge, montantHt: Number(e.target.value) })} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs">Date</Label>
+                  <Input className="h-9" type="date" value={nouvelleCharge.dateOperation} onChange={(e) => setNouvelleCharge({ ...nouvelleCharge, dateOperation: e.target.value })} />
+                </div>
+                <Button type="submit" size="sm">Ajouter</Button>
+              </form>
+            </div>
+
+            {prorata && prorata.participants.length > 0 && (
+              <div className="rounded-md bg-muted/30 p-3 text-sm">
+                Total charges TTC : <span className="font-semibold">{prorata.totalTtc.toLocaleString("fr-FR")} €</span>
+                {" — "}Part par participant (repartition egale) : <span className="font-semibold">{prorata.partParParticipant.toLocaleString("fr-FR")} €</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <Dialog open={isEditOpen} onClose={() => setIsEditOpen(false)}>

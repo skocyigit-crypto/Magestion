@@ -28,6 +28,10 @@ const MODULE_ACCESS: Record<string, Partial<Record<Role, Access>>> = {
   agenda: { COMMERCIAL: "write" },
   relances: { COMMERCIAL: "write" },
   aiImport: { COMPTABILITE: "write", COMMERCIAL: "write", TERRAIN: "write" },
+  notesDeFrais: { TERRAIN: "write", COMPTABILITE: "write" },
+  locationsMateriel: { TERRAIN: "write", COMPTABILITE: "read" },
+  prorata: { COMPTABILITE: "write", TERRAIN: "read" },
+  analyticsCommercial: { COMMERCIAL: "write", COMPTABILITE: "read" },
   // "users" et "parametres" delibere absents : gestion des utilisateurs et
   // coordonnees legales de l'entreprise = SUPER_ADMIN uniquement (bypass
   // ligne 44), aucun autre role n'y a jamais acces, meme en lecture.
