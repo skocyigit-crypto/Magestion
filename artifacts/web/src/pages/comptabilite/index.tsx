@@ -14,10 +14,26 @@ import {
   updateEtapeCloture,
   type EtapeClotureStatut,
 } from "@/lib/clotureComptable";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  CATEGORIE_LABELS as IMMO_CATEGORIE_LABELS,
+  STATUT_LABELS as IMMO_STATUT_LABELS,
+  createImmobilisation,
+  getImmobilisationStats,
+  getPlanAmortissement,
+  listImmobilisations,
+  updateImmobilisation,
+  type Immobilisation,
+  type ImmobilisationCategorie,
+  type ImmobilisationInput,
+  type ImmobilisationStatut,
+  type PlanAmortissement,
+} from "@/lib/immobilisations";
 
 const fmt = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-type Tab = "journal" | "balance" | "plan" | "lettrage" | "tva" | "cloture";
+type Tab = "journal" | "balance" | "plan" | "lettrage" | "tva" | "cloture" | "immobilisations";
 
 export default function ComptabilitePage() {
   const queryClient = useQueryClient();
@@ -129,6 +145,48 @@ export default function ComptabilitePage() {
     await queryClient.invalidateQueries({ queryKey: ["cloture-comptable"] });
   }
 
+  const { data: immobilisations, isLoading: immoLoading, isError: immoError } = useQuery({
+    queryKey: ["immobilisations"],
+    queryFn: () => listImmobilisations(),
+    enabled: tab === "immobilisations",
+  });
+  const { data: immoStats } = useQuery({
+    queryKey: ["immobilisations", "stats"],
+    queryFn: getImmobilisationStats,
+    enabled: tab === "immobilisations",
+  });
+  const [isImmoOpen, setIsImmoOpen] = useState(false);
+  const EMPTY_IMMO_FORM: ImmobilisationInput = { designation: "", dateAcquisition: "", valeurAcquisition: 0, dureeAmortissement: 5, categorie: "MATERIEL" };
+  const [immoForm, setImmoForm] = useState<ImmobilisationInput>(EMPTY_IMMO_FORM);
+  const [immoSaving, setImmoSaving] = useState(false);
+  const [immoError2, setImmoError2] = useState<string | null>(null);
+  const [planOuvert, setPlanOuvert] = useState<PlanAmortissement | null>(null);
+
+  async function handleCreateImmo(e: React.FormEvent) {
+    e.preventDefault();
+    setImmoSaving(true);
+    setImmoError2(null);
+    try {
+      await createImmobilisation(immoForm);
+      await queryClient.invalidateQueries({ queryKey: ["immobilisations"] });
+      setIsImmoOpen(false);
+      setImmoForm(EMPTY_IMMO_FORM);
+    } catch (err) {
+      setImmoError2(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
+    } finally {
+      setImmoSaving(false);
+    }
+  }
+
+  async function handleImmoStatutChange(id: string, statut: ImmobilisationStatut) {
+    await updateImmobilisation(id, { statut });
+    await queryClient.invalidateQueries({ queryKey: ["immobilisations"] });
+  }
+
+  async function handleVoirPlan(id: string) {
+    setPlanOuvert(await getPlanAmortissement(id));
+  }
+
   const { data: journal, isLoading: journalLoading, isError: journalError } = useQuery({ queryKey: ["comptabilite", "journal"], queryFn: listJournal });
   const { data: balance, isLoading: balanceLoading, isError: balanceError } = useQuery({
     queryKey: ["comptabilite", "balance", exerciceNum],
@@ -216,6 +274,9 @@ export default function ComptabilitePage() {
           </Button>
           <Button variant={tab === "cloture" ? "default" : "outline"} size="sm" onClick={() => setTab("cloture")}>
             Cloture d'exercice
+          </Button>
+          <Button variant={tab === "immobilisations" ? "default" : "outline"} size="sm" onClick={() => setTab("immobilisations")}>
+            Immobilisations
           </Button>
         </div>
 
@@ -523,7 +584,178 @@ export default function ComptabilitePage() {
             </div>
           </>
         )}
+
+        {tab === "immobilisations" && (
+          <>
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Amortissement lineaire calcule automatiquement — aucune valeur n'est stockee, tout est recalcule a la lecture.</p>
+              <Button size="sm" onClick={() => setIsImmoOpen(true)}>Nouvelle immobilisation</Button>
+            </div>
+
+            {immoStats && (
+              <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+                <Card>
+                  <CardHeader><CardTitle>Total immobilisations</CardTitle></CardHeader>
+                  <CardContent><p className="text-2xl font-semibold">{immoStats.total}</p></CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle>Valeur d'acquisition</CardTitle></CardHeader>
+                  <CardContent><p className="text-2xl font-semibold">{fmt(immoStats.totalAcquisition)} €</p></CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle>Valeur nette comptable</CardTitle></CardHeader>
+                  <CardContent><p className="text-2xl font-semibold">{fmt(immoStats.totalVNC)} €</p></CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle>Dotation annuelle</CardTitle></CardHeader>
+                  <CardContent><p className="text-2xl font-semibold">{fmt(immoStats.totalDotation)} €</p></CardContent>
+                </Card>
+              </div>
+            )}
+
+            {immoError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees.</p>}
+            {immoLoading && <p className="text-muted-foreground">Chargement...</p>}
+
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="px-3 py-2">Code</th>
+                    <th className="px-3 py-2">Designation</th>
+                    <th className="px-3 py-2">Categorie</th>
+                    <th className="px-3 py-2 text-right">Valeur acquisition</th>
+                    <th className="px-3 py-2 text-right">Amort. cumule</th>
+                    <th className="px-3 py-2 text-right">VNC</th>
+                    <th className="px-3 py-2">Statut</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(immobilisations ?? []).map((immo: Immobilisation) => (
+                    <tr key={immo.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-3 py-2">{immo.code}</td>
+                      <td className="px-3 py-2">{immo.designation}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{IMMO_CATEGORIE_LABELS[immo.categorie]}</td>
+                      <td className="px-3 py-2 text-right">{fmt(Number(immo.valeurAcquisition))} €</td>
+                      <td className="px-3 py-2 text-right">{fmt(immo.amortissementCumule)} €</td>
+                      <td className="px-3 py-2 text-right font-medium">{fmt(immo.valeurNetteComptable)} €</td>
+                      <td className="px-3 py-2">
+                        <select
+                          className="h-8 rounded-md border border-border bg-transparent px-2 text-xs"
+                          value={immo.statut}
+                          onChange={(e) => handleImmoStatutChange(immo.id, e.target.value as ImmobilisationStatut)}
+                        >
+                          {Object.entries(IMMO_STATUT_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <Button size="sm" variant="outline" onClick={() => handleVoirPlan(immo.id)}>Plan</Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {!immoLoading && !immoError && (immobilisations ?? []).length === 0 && (
+                    <tr><td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">Aucune immobilisation pour le moment.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
+
+      <Dialog open={isImmoOpen} onClose={() => setIsImmoOpen(false)}>
+        <DialogHeader><DialogTitle>Nouvelle immobilisation</DialogTitle></DialogHeader>
+        <form onSubmit={handleCreateImmo} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="immoDesignation">Designation</Label>
+            <Input id="immoDesignation" required value={immoForm.designation} onChange={(e) => setImmoForm({ ...immoForm, designation: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="immoCategorie">Categorie</Label>
+              <select
+                id="immoCategorie"
+                className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+                value={immoForm.categorie ?? "MATERIEL"}
+                onChange={(e) => setImmoForm({ ...immoForm, categorie: e.target.value as ImmobilisationCategorie })}
+              >
+                {Object.entries(IMMO_CATEGORIE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="immoDuree">Duree d'amortissement (annees)</Label>
+              <Input
+                id="immoDuree"
+                type="number"
+                min={1}
+                max={50}
+                value={immoForm.dureeAmortissement ?? 5}
+                onChange={(e) => setImmoForm({ ...immoForm, dureeAmortissement: Number(e.target.value) })}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="immoDateAcquisition">Date d'acquisition</Label>
+              <Input id="immoDateAcquisition" type="date" required value={immoForm.dateAcquisition} onChange={(e) => setImmoForm({ ...immoForm, dateAcquisition: e.target.value })} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="immoDateMES">Date de mise en service (optionnel)</Label>
+              <Input id="immoDateMES" type="date" value={immoForm.dateMiseEnService ?? ""} onChange={(e) => setImmoForm({ ...immoForm, dateMiseEnService: e.target.value })} />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="immoValeur">Valeur d'acquisition HT (€)</Label>
+            <Input
+              id="immoValeur"
+              type="number"
+              min={0}
+              step="0.01"
+              value={immoForm.valeurAcquisition}
+              onChange={(e) => setImmoForm({ ...immoForm, valeurAcquisition: Number(e.target.value) })}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="immoLocalisation">Localisation (optionnel)</Label>
+            <Input id="immoLocalisation" value={immoForm.localisation ?? ""} onChange={(e) => setImmoForm({ ...immoForm, localisation: e.target.value })} />
+          </div>
+          {immoError2 && <p className="text-sm text-red-400">{immoError2}</p>}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setIsImmoOpen(false)}>Annuler</Button>
+            <Button type="submit" disabled={immoSaving}>{immoSaving ? "Enregistrement..." : "Creer"}</Button>
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog open={!!planOuvert} onClose={() => setPlanOuvert(null)}>
+        <DialogHeader><DialogTitle>Plan d'amortissement — {planOuvert?.designation}</DialogTitle></DialogHeader>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-muted-foreground">
+                <th className="px-3 py-2">Annee</th>
+                <th className="px-3 py-2 text-right">Dotation</th>
+                <th className="px-3 py-2 text-right">Cumul</th>
+                <th className="px-3 py-2 text-right">VNC</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(planOuvert?.plan ?? []).map((l) => (
+                <tr key={l.annee} className="border-b border-border last:border-0">
+                  <td className="px-3 py-2">{l.annee}</td>
+                  <td className="px-3 py-2 text-right">{fmt(l.dotation)} €</td>
+                  <td className="px-3 py-2 text-right">{fmt(l.cumul)} €</td>
+                  <td className="px-3 py-2 text-right">{fmt(l.vnc)} €</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Dialog>
     </Layout>
   );
 }
