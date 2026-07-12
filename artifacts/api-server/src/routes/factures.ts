@@ -7,6 +7,8 @@ import { requireModuleAccess } from "../lib/rbac.js";
 import { recordFactureEmission } from "../lib/journalEntry.js";
 import { licenceToPdfInfo, renderDocumentPdfBuffer, streamDocumentPdf } from "../lib/pdf.js";
 import { EmailNotConfiguredError, escapeHtml, sendMail } from "../lib/mail.js";
+import { generateFacturxXml, validateFacturxInvoice, type FacturxInvoiceInput } from "../lib/facturx-xml.js";
+import { getPdpConnector } from "../lib/pdp.js";
 
 export const facturesRouter = Router();
 facturesRouter.use(requireModuleAccess("factures"));
@@ -14,11 +16,49 @@ facturesRouter.use(requireModuleAccess("factures"));
 const factureUpdateSchema = z.object({
   objet: z.string().min(1).max(500).optional(),
   clientEmail: z.string().email().optional().or(z.literal("")),
-  montantHt: z.number().nonnegative().optional(),
+  clientAdresse: z.string().max(500).optional(),
+  clientCodePostal: z.string().max(10).optional(),
+  clientVille: z.string().max(200).optional(),
+  clientSiret: z.string().max(20).optional(),
+  clientPays: z.string().max(100).optional(),
+  montantHt: z.number().nonnegative().max(9999999999.99).optional(),
   tauxTva: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]).optional(),
   dateEcheance: z.string().optional(),
   active: z.boolean().optional(),
 });
+
+// Construit l'entree Factur-X a partir d'une facture + de la licence
+// (vendeur). Partage entre /facturx-xml et /transmettre-pdp pour ne pas
+// dupliquer le mapping.
+function toFacturxInput(
+  facture: typeof facturesTable.$inferSelect,
+  licence: typeof licencesTable.$inferSelect | undefined,
+): FacturxInvoiceInput {
+  return {
+    numero: facture.numero,
+    dateEmission: facture.createdAt,
+    dateEcheance: facture.dateEcheance,
+    objet: facture.objet,
+    montantHt: Number(facture.montantHt),
+    tauxTva: Number(facture.tauxTva),
+    vendeur: {
+      nom: licence?.nom ?? "",
+      siret: licence?.siret ?? null,
+      tvaIntra: licence?.tvaIntracommunautaire ?? null,
+      adresse: licence?.adresse ?? "",
+      codePostal: licence?.codePostal ?? "",
+      ville: licence?.ville ?? "",
+    },
+    acheteur: {
+      nom: facture.client,
+      siret: facture.clientSiret,
+      adresse: facture.clientAdresse ?? "",
+      codePostal: facture.clientCodePostal ?? "",
+      ville: facture.clientVille ?? "",
+      pays: facture.clientPays,
+    },
+  };
+}
 
 facturesRouter.get("/", async (req, res) => {
   const licenceId = requireLicenceId(req.user!, res);
@@ -103,7 +143,11 @@ facturesRouter.patch("/:id", async (req, res) => {
     return;
   }
 
-  const { objet, clientEmail, montantHt, tauxTva, dateEcheance, active } = parsed.data;
+  const { objet, clientEmail, clientAdresse, clientCodePostal, clientVille, clientSiret, clientPays, montantHt, tauxTva, dateEcheance, active } = parsed.data;
+  // Les champs d'adresse acheteur restent modifiables meme apres emission :
+  // ils ne changent aucun fait comptable (montant/objet/echeance) et sont
+  // precisement ceux qu'on renseigne le plus souvent APRES coup, en
+  // preparation d'une transmission PDP (voir /transmettre-pdp).
   const touchesLockedFields =
     objet !== undefined || clientEmail !== undefined || montantHt !== undefined || tauxTva !== undefined || dateEcheance !== undefined;
   if (touchesLockedFields && existing.statut !== "BROUILLON") {
@@ -116,6 +160,11 @@ facturesRouter.patch("/:id", async (req, res) => {
     .set({
       ...(objet !== undefined ? { objet } : {}),
       ...(clientEmail !== undefined ? { clientEmail: clientEmail || null } : {}),
+      ...(clientAdresse !== undefined ? { clientAdresse } : {}),
+      ...(clientCodePostal !== undefined ? { clientCodePostal } : {}),
+      ...(clientVille !== undefined ? { clientVille } : {}),
+      ...(clientSiret !== undefined ? { clientSiret } : {}),
+      ...(clientPays !== undefined ? { clientPays } : {}),
       ...(montantHt !== undefined ? { montantHt: montantHt.toString() } : {}),
       ...(tauxTva !== undefined ? { tauxTva: tauxTva.toString() } : {}),
       ...(dateEcheance !== undefined ? { dateEcheance } : {}),
@@ -216,4 +265,125 @@ facturesRouter.post("/:id/statut", async (req, res) => {
   }
 
   res.json(updated);
+});
+
+// Genere le XML Factur-X (CII EN16931) de la facture — utilisable en
+// previsualisation des BROUILLON, meme si la transmission PDP (ci-dessous)
+// n'est autorisee qu'une fois la facture EMISE (immuable).
+facturesRouter.get("/:id/facturx-xml", async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  const [facture] = await db
+    .select()
+    .from(facturesTable)
+    .where(and(eq(facturesTable.id, req.params.id), eq(facturesTable.licenceId, licenceId)))
+    .limit(1);
+  if (!facture) {
+    res.status(404).json({ error: "Facture introuvable" });
+    return;
+  }
+
+  const [licence] = await db.select().from(licencesTable).where(eq(licencesTable.id, licenceId)).limit(1);
+  const xml = generateFacturxXml(toFacturxInput(facture, licence));
+
+  res.setHeader("Content-Type", "application/xml; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="facturx-${facture.numero}.xml"`);
+  res.send(xml);
+});
+
+// Transmission a la PDP (reelle si PDP_API_URL configuree, simulee sinon —
+// voir lib/pdp.ts). Reservee aux factures EMISES (immuables) : transmettre
+// un brouillon modifiable produirait un document legal qui pourrait ensuite
+// changer sous les pieds du destinataire.
+facturesRouter.post("/:id/transmettre-pdp", async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  const [facture] = await db
+    .select()
+    .from(facturesTable)
+    .where(and(eq(facturesTable.id, req.params.id), eq(facturesTable.licenceId, licenceId)))
+    .limit(1);
+  if (!facture) {
+    res.status(404).json({ error: "Facture introuvable" });
+    return;
+  }
+  if (facture.statut === "BROUILLON") {
+    res.status(409).json({ error: "La facture doit d'abord etre emise (statut Envoyee) avant transmission PDP" });
+    return;
+  }
+
+  const [licence] = await db.select().from(licencesTable).where(eq(licencesTable.id, licenceId)).limit(1);
+  const input = toFacturxInput(facture, licence);
+  const errors = validateFacturxInvoice(input);
+  if (errors.length > 0) {
+    res.status(400).json({ error: "Donnees insuffisantes pour la facturation electronique", details: errors });
+    return;
+  }
+
+  const xml = generateFacturxXml(input);
+  const connector = getPdpConnector();
+
+  try {
+    const result = await connector.transmit({
+      numero: facture.numero,
+      xml,
+      clientNom: facture.client,
+      montantTtc: Number(facture.montantHt) * (1 + Number(facture.tauxTva) / 100),
+    });
+    const [updated] = await db
+      .update(facturesTable)
+      .set({
+        eStatut: result.status,
+        ePlatformRef: result.platformRef,
+        eSimulation: result.simulation,
+        eTransmisAt: new Date(),
+        eErreur: null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(facturesTable.id, req.params.id), eq(facturesTable.licenceId, licenceId)))
+      .returning();
+    res.json(updated);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Echec de la transmission PDP";
+    await db
+      .update(facturesTable)
+      .set({ eErreur: message, updatedAt: new Date() })
+      .where(and(eq(facturesTable.id, req.params.id), eq(facturesTable.licenceId, licenceId)));
+    res.status(502).json({ error: message });
+  }
+});
+
+// Rafraichit le statut aupres de la PDP (deposee -> recue -> acceptee/refusee...).
+facturesRouter.get("/:id/statut-pdp", async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  const [facture] = await db
+    .select()
+    .from(facturesTable)
+    .where(and(eq(facturesTable.id, req.params.id), eq(facturesTable.licenceId, licenceId)))
+    .limit(1);
+  if (!facture) {
+    res.status(404).json({ error: "Facture introuvable" });
+    return;
+  }
+  if (!facture.ePlatformRef) {
+    res.status(409).json({ error: "Facture jamais transmise a une PDP" });
+    return;
+  }
+
+  const connector = getPdpConnector();
+  try {
+    const result = await connector.getStatus(facture.ePlatformRef);
+    const [updated] = await db
+      .update(facturesTable)
+      .set({ eStatut: result.status, updatedAt: new Date() })
+      .where(and(eq(facturesTable.id, req.params.id), eq(facturesTable.licenceId, licenceId)))
+      .returning();
+    res.json(updated);
+  } catch (err) {
+    res.status(502).json({ error: err instanceof Error ? err.message : "Echec de la recuperation du statut PDP" });
+  }
 });
