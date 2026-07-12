@@ -2,6 +2,8 @@ import { apiFetch, downloadFile } from "@/lib/api";
 
 export type FactureStatut = "BROUILLON" | "ENVOYEE" | "PAYEE" | "EN_RETARD";
 
+export type FactureEStatut = "deposee" | "recue_destinataire" | "acceptee" | "refusee" | "en_litige" | "encaissee";
+
 export interface Facture {
   id: string;
   projectId: string | null;
@@ -9,16 +11,35 @@ export interface Facture {
   numero: string;
   client: string;
   clientEmail: string | null;
+  clientAdresse: string | null;
+  clientCodePostal: string | null;
+  clientVille: string | null;
+  clientSiret: string | null;
+  clientPays: string | null;
   objet: string;
   statut: FactureStatut;
   montantHt: string;
   tauxTva: string;
   dateEcheance: string | null;
   datePaiement: string | null;
+  eStatut: FactureEStatut | null;
+  ePlatformRef: string | null;
+  eSimulation: boolean | null;
+  eTransmisAt: string | null;
+  eErreur: string | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
 }
+
+export const FACTURE_E_STATUT_LABELS: Record<FactureEStatut, string> = {
+  deposee: "Deposee sur la plateforme",
+  recue_destinataire: "Mise a disposition du destinataire",
+  acceptee: "Acceptee par le destinataire",
+  refusee: "Refusee par le destinataire",
+  en_litige: "En litige",
+  encaissee: "Paiement signale",
+};
 
 export interface FactureStatutChangeResult extends Facture {
   emailSent?: boolean;
@@ -40,6 +61,11 @@ export function changeFactureStatut(id: string, statut: "ENVOYEE" | "PAYEE" | "E
 export interface FactureUpdateInput {
   objet?: string;
   clientEmail?: string;
+  clientAdresse?: string;
+  clientCodePostal?: string;
+  clientVille?: string;
+  clientSiret?: string;
+  clientPays?: string;
   montantHt?: number;
   tauxTva?: 0 | 5.5 | 10 | 20;
   dateEcheance?: string;
@@ -52,6 +78,18 @@ export function updateFacture(id: string, input: FactureUpdateInput) {
 
 export function downloadFacturePdf(id: string, numero: string) {
   return downloadFile(`/factures/${id}/pdf`, `facture-${numero}.pdf`);
+}
+
+export function downloadFacturxXml(id: string, numero: string) {
+  return downloadFile(`/factures/${id}/facturx-xml`, `facturx-${numero}.xml`);
+}
+
+export function transmettrePdp(id: string) {
+  return apiFetch<Facture>(`/factures/${id}/transmettre-pdp`, { method: "POST" });
+}
+
+export function rafraichirStatutPdp(id: string) {
+  return apiFetch<Facture>(`/factures/${id}/statut-pdp`);
 }
 
 export const FACTURE_STATUT_LABELS: Record<FactureStatut, string> = {
