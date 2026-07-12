@@ -20,9 +20,11 @@ const registerSchema = z.object({
   password: z.string().min(8).max(256),
 });
 
+const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
+
 // Auto-inscription : cree une nouvelle licence (tenant) ET son premier
 // utilisateur (SUPER_ADMIN de cette licence) en une seule requete publique.
-// Plan TRIAL par defaut (valeur par defaut du schema licences).
+// Plan TRIAL par defaut (valeur par defaut du schema licences), essai 14 jours.
 authRouter.post("/register", async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -37,7 +39,10 @@ authRouter.post("/register", async (req, res) => {
     return;
   }
 
-  const [licence] = await db.insert(licencesTable).values({ nom: parsed.data.entreprise }).returning();
+  const [licence] = await db
+    .insert(licencesTable)
+    .values({ nom: parsed.data.entreprise, trialEndsAt: new Date(Date.now() + TRIAL_DURATION_MS) })
+    .returning();
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
   const [user] = await db

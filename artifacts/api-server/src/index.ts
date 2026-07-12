@@ -41,6 +41,8 @@ import { declarationsTvaRouter } from "./routes/declarationsTva.js";
 import { chantierPlanningRouter } from "./routes/chantierPlanning.js";
 import { clientsRouter } from "./routes/clients.js";
 import { fournisseursRouter } from "./routes/fournisseurs.js";
+import { billingRouter } from "./routes/billing.js";
+import { stripeWebhookRouter } from "./routes/stripe-webhook.js";
 import { closeDb } from "@magestion/db";
 
 const app = express();
@@ -49,6 +51,12 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "http://localhost:5173").
 
 app.use(helmet());
 app.use(cors({ origin: allowedOrigins, credentials: true }));
+
+// Corps BRUT requis pour la verification de signature Stripe (HMAC sur les
+// octets exacts recus) — DOIT etre monte avant express.json() ci-dessous,
+// sinon le corps est deja (re)serialise en JSON et la signature ne matche plus.
+app.use("/api/stripe-webhook", express.raw({ type: "application/json" }), stripeWebhookRouter);
+
 app.use(express.json({ limit: "2mb" }));
 
 // --- Routes publiques (PAS de extractUser) ---
@@ -95,6 +103,7 @@ app.use("/api/declarations-tva", declarationsTvaRouter);
 app.use("/api/planning-chantier", chantierPlanningRouter);
 app.use("/api/clients", clientsRouter);
 app.use("/api/fournisseurs", fournisseursRouter);
+app.use("/api/billing", billingRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Route introuvable" });
