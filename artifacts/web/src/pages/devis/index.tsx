@@ -11,14 +11,18 @@ import {
   DEVIS_STATUT_LABELS,
   TAUX_TVA_OPTIONS,
   createDevis,
+  ligneMontantHt,
   listDevis,
   montantTtc,
   type DevisInput,
+  type LigneInput,
   type TauxTva,
 } from "@/lib/devis";
 import { listProjects } from "@/lib/projects";
+import { LigneEditor } from "@/components/ligne-editor";
 
-const EMPTY_FORM: DevisInput = { client: "", objet: "", montantHt: 0, tauxTva: 20 };
+const EMPTY_LIGNE: LigneInput = { designation: "", quantite: 1, unite: "u", prixUnitaireHt: 0, remisePercent: 0 };
+const EMPTY_FORM: DevisInput = { client: "", objet: "", tauxTva: 20, lignes: [{ ...EMPTY_LIGNE }] };
 
 export default function DevisPage() {
   const queryClient = useQueryClient();
@@ -53,10 +57,15 @@ export default function DevisPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    const lignesValides = (form.lignes ?? []).filter((l) => l.designation.trim() && l.quantite > 0);
+    if (lignesValides.length === 0) {
+      setError("Ajoutez au moins une ligne avec une designation");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await createDevis(form);
+      await createDevis({ ...form, lignes: lignesValides });
       await queryClient.invalidateQueries({ queryKey: ["devis"] });
       setIsOpen(false);
       setForm(EMPTY_FORM);
@@ -171,33 +180,25 @@ export default function DevisPage() {
               ))}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="montantHt">Montant HT (€)</Label>
-              <Input
-                id="montantHt"
-                type="number"
-                min={0}
-                value={form.montantHt}
-                onChange={(e) => setForm({ ...form, montantHt: Number(e.target.value) })}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tauxTva">TVA</Label>
-              <select
-                id="tauxTva"
-                className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
-                value={form.tauxTva}
-                onChange={(e) => setForm({ ...form, tauxTva: Number(e.target.value) as TauxTva })}
-              >
-                {TAUX_TVA_OPTIONS.map((taux) => (
-                  <option key={taux} value={taux}>{taux} %</option>
-                ))}
-              </select>
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="tauxTva">TVA (s'applique a toutes les lignes)</Label>
+            <select
+              id="tauxTva"
+              className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+              value={form.tauxTva}
+              onChange={(e) => setForm({ ...form, tauxTva: Number(e.target.value) as TauxTva })}
+            >
+              {TAUX_TVA_OPTIONS.map((taux) => (
+                <option key={taux} value={taux}>{taux} %</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Lignes</Label>
+            <LigneEditor lignes={form.lignes ?? []} onChange={(lignes) => setForm({ ...form, lignes })} />
           </div>
           <p className="text-sm text-muted-foreground">
-            Montant TTC : {montantTtc(form.montantHt, form.tauxTva).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} €
+            Montant TTC : {montantTtc((form.lignes ?? []).reduce((s, l) => s + ligneMontantHt(l), 0), form.tauxTva).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} €
           </p>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex justify-end gap-2">

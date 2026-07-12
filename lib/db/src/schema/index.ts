@@ -26,3 +26,4 @@ export * from "./journalRgpd.js";
 export * from "./notesDeFrais.js";
 export * from "./locationsMateriel.js";
 export * from "./prorata.js";
+export * from "./lignes.js";

@@ -20,13 +20,33 @@ export interface Devis {
   updatedAt: string;
 }
 
+export interface LigneInput {
+  designation: string;
+  quantite: number;
+  unite?: string;
+  prixUnitaireHt: number;
+  remisePercent?: number;
+}
+
+export interface Ligne extends LigneInput {
+  id: string;
+  ordre: number;
+  unite: string;
+  remisePercent: number;
+}
+
+export function ligneMontantHt(l: LigneInput): number {
+  return Math.round(l.quantite * l.prixUnitaireHt * (1 - (l.remisePercent ?? 0) / 100) * 100) / 100;
+}
+
 export interface DevisInput {
   client: string;
   clientEmail?: string;
   objet: string;
   projectId?: string;
-  montantHt: number;
+  montantHt?: number;
   tauxTva: TauxTva;
+  lignes?: LigneInput[];
 }
 
 export interface StatutChangeResult extends Devis {
@@ -61,6 +81,15 @@ export function convertirEnFacture(id: string) {
 
 export function downloadDevisPdf(id: string, numero: string) {
   return downloadFile(`/devis/${id}/pdf`, `devis-${numero}.pdf`);
+}
+
+export function listDevisLignes(id: string) {
+  return apiFetch<Ligne[]>(`/devis/${id}/lignes`);
+}
+
+// Remplace l'integralite des lignes — refuse (423) une fois le devis hors BROUILLON.
+export function saveDevisLignes(id: string, lignes: LigneInput[]) {
+  return apiFetch<{ devis: Devis; lignes: Ligne[] }>(`/devis/${id}/lignes`, { method: "PUT", body: JSON.stringify({ lignes }) });
 }
 
 export function montantTtc(montantHt: string | number, tauxTva: string | number): number {

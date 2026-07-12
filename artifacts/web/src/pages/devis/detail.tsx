@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
@@ -14,13 +14,17 @@ import {
   convertirEnFacture,
   downloadDevisPdf,
   getDevis,
+  listDevisLignes,
   montantTtc,
+  saveDevisLignes,
   updateDevis,
   type DevisInput,
+  type LigneInput,
   type TauxTva,
 } from "@/lib/devis";
 import { listProjects } from "@/lib/projects";
 import { listFactures } from "@/lib/factures";
+import { LigneEditor } from "@/components/ligne-editor";
 
 export default function DevisDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,15 +33,47 @@ export default function DevisDetailPage() {
   const { data: devis, isLoading, isError } = useQuery({ queryKey: ["devis", id], queryFn: () => getDevis(id) });
   const { data: projects } = useQuery({ queryKey: ["projects"], queryFn: listProjects });
   const { data: facturesList } = useQuery({ queryKey: ["factures"], queryFn: listFactures });
+  const { data: lignes } = useQuery({ queryKey: ["devis", id, "lignes"], queryFn: () => listDevisLignes(id) });
   const factureIssue = (facturesList ?? []).find((f) => f.devisId === id);
   const [converting, setConverting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sendNotice, setSendNotice] = useState<string | null>(null);
 
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [form, setForm] = useState<DevisInput>({ client: "", objet: "", montantHt: 0, tauxTva: 20 });
+  const [form, setForm] = useState<DevisInput>({ client: "", objet: "", tauxTva: 20 });
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  const [editLignes, setEditLignes] = useState<LigneInput[]>([]);
+  const [lignesSaving, setLignesSaving] = useState(false);
+  const [lignesError, setLignesError] = useState<string | null>(null);
+
+  // Synchronise l'editeur local avec les lignes chargees — seulement tant
+  // qu'aucune edition locale n'a encore commence, pour ne pas ecraser une
+  // saisie en cours a chaque refetch.
+  useEffect(() => {
+    if (lignes && editLignes.length === 0) setEditLignes(lignes.map((l) => ({ ...l })));
+  }, [lignes]);
+
+  async function handleSaveLignes() {
+    const valides = editLignes.filter((l) => l.designation.trim() && l.quantite > 0);
+    if (valides.length === 0) {
+      setLignesError("Ajoutez au moins une ligne avec une designation");
+      return;
+    }
+    setLignesSaving(true);
+    setLignesError(null);
+    try {
+      await saveDevisLignes(id, valides);
+      await queryClient.invalidateQueries({ queryKey: ["devis", id] });
+      await queryClient.invalidateQueries({ queryKey: ["devis", id, "lignes"] });
+      await queryClient.invalidateQueries({ queryKey: ["devis"] });
+    } catch (err) {
+      setLignesError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement des lignes");
+    } finally {
+      setLignesSaving(false);
+    }
+  }
 
   function openEdit() {
     if (!devis) return;
@@ -46,7 +82,6 @@ export default function DevisDetailPage() {
       clientEmail: devis.clientEmail ?? undefined,
       objet: devis.objet,
       projectId: devis.projectId ?? undefined,
-      montantHt: Number(devis.montantHt),
       tauxTva: Number(devis.tauxTva) as TauxTva,
     });
     setEditError(null);
@@ -160,6 +195,19 @@ export default function DevisDetailPage() {
           </Card>
         </div>
 
+        <Card className="mt-6">
+          <CardHeader><CardTitle>Lignes</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <LigneEditor lignes={editLignes} onChange={setEditLignes} disabled={devis.statut !== "BROUILLON"} />
+            {devis.statut === "BROUILLON" && (
+              <div className="flex items-center gap-3">
+                <Button size="sm" onClick={handleSaveLignes} disabled={lignesSaving}>{lignesSaving ? "Enregistrement..." : "Enregistrer les lignes"}</Button>
+                {lignesError && <p className="text-sm text-red-400">{lignesError}</p>}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <p className="mt-6 text-xs text-muted-foreground">
           Un devis ne peut jamais etre supprime (tracabilite financiere) — seul l'archivage est possible.
         </p>
@@ -201,30 +249,18 @@ export default function DevisDetailPage() {
               ))}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-montantHt">Montant HT (€)</Label>
-              <Input
-                id="edit-montantHt"
-                type="number"
-                min={0}
-                value={form.montantHt}
-                onChange={(e) => setForm({ ...form, montantHt: Number(e.target.value) })}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-tauxTva">TVA</Label>
-              <select
-                id="edit-tauxTva"
-                className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
-                value={form.tauxTva}
-                onChange={(e) => setForm({ ...form, tauxTva: Number(e.target.value) as TauxTva })}
-              >
-                {TAUX_TVA_OPTIONS.map((taux) => (
-                  <option key={taux} value={taux}>{taux} %</option>
-                ))}
-              </select>
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-tauxTva">TVA</Label>
+            <select
+              id="edit-tauxTva"
+              className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+              value={form.tauxTva}
+              onChange={(e) => setForm({ ...form, tauxTva: Number(e.target.value) as TauxTva })}
+            >
+              {TAUX_TVA_OPTIONS.map((taux) => (
+                <option key={taux} value={taux}>{taux} %</option>
+              ))}
+            </select>
           </div>
           {editError && <p className="text-sm text-red-400">{editError}</p>}
           <div className="flex justify-end gap-2">

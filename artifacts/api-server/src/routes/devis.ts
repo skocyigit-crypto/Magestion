@@ -1,24 +1,52 @@
 import { Router } from "express";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { db, devisTable, facturesTable, licencesTable } from "@magestion/db";
+import { db, devisTable, devisLignesTable, facturesTable, factureLignesTable, licencesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
 import { withNumero } from "../lib/numbering.js";
 import { licenceToPdfInfo, renderDocumentPdfBuffer, streamDocumentPdf } from "../lib/pdf.js";
 import { EmailNotConfiguredError, escapeHtml, sendMail } from "../lib/mail.js";
+import { ligneInputSchema, ligneMontantHt, totalLignesHt, type LigneInput } from "../lib/lignes.js";
+import type { DocumentPdfLigne } from "../lib/pdf.js";
 
 export const devisRouter = Router();
 devisRouter.use(requireModuleAccess("devis"));
 
+// montantHt devient optionnel des qu'on fournit des lignes (le total est
+// alors calcule serveur, jamais fait confiance au client — voir POST /).
 const devisInputSchema = z.object({
   client: z.string().min(1).max(200),
   clientEmail: z.string().email().optional().or(z.literal("")),
   objet: z.string().min(1).max(500),
   projectId: z.string().uuid().optional(),
-  montantHt: z.number().nonnegative().max(9999999999.99),
+  montantHt: z.number().nonnegative().max(9999999999.99).optional(),
   tauxTva: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]),
+  lignes: z.array(ligneInputSchema).max(200).optional(),
 });
+
+async function toPdfLignes(devisId: string): Promise<DocumentPdfLigne[] | undefined> {
+  const rows = await db.select().from(devisLignesTable).where(eq(devisLignesTable.devisId, devisId));
+  if (rows.length === 0) return undefined;
+  return rows
+    .sort((a, b) => a.ordre - b.ordre)
+    .map((r) => {
+      const l: LigneInput = { designation: r.designation, quantite: Number(r.quantite), unite: r.unite, prixUnitaireHt: Number(r.prixUnitaireHt), remisePercent: Number(r.remisePercent) };
+      return { designation: l.designation, quantite: l.quantite, unite: r.unite, prixUnitaireHt: l.prixUnitaireHt, remisePercent: Number(r.remisePercent), montantHt: ligneMontantHt(l) };
+    });
+}
+
+function lignesValues(devisId: string, lignes: LigneInput[]) {
+  return lignes.map((l, i) => ({
+    devisId,
+    ordre: i,
+    designation: l.designation,
+    quantite: l.quantite.toString(),
+    unite: l.unite ?? "u",
+    prixUnitaireHt: l.prixUnitaireHt.toString(),
+    remisePercent: (l.remisePercent ?? 0).toString(),
+  }));
+}
 
 const devisUpdateSchema = devisInputSchema.partial().extend({
   active: z.boolean().optional(),
@@ -47,6 +75,13 @@ devisRouter.post("/", async (req, res) => {
     return;
   }
 
+  const lignes = parsed.data.lignes;
+  if ((!lignes || lignes.length === 0) && parsed.data.montantHt === undefined) {
+    res.status(400).json({ error: "Fournissez soit des lignes, soit un montantHt" });
+    return;
+  }
+  const montantHt = lignes && lignes.length > 0 ? totalLignesHt(lignes) : parsed.data.montantHt!;
+
   const created = await withNumero("devis", "DEV", licenceId, async (numero) => {
     const [row] = await db
       .insert(devisTable)
@@ -57,14 +92,78 @@ devisRouter.post("/", async (req, res) => {
         clientEmail: parsed.data.clientEmail || undefined,
         objet: parsed.data.objet,
         projectId: parsed.data.projectId,
-        montantHt: parsed.data.montantHt.toString(),
+        montantHt: montantHt.toString(),
         tauxTva: parsed.data.tauxTva.toString(),
       })
       .returning();
+    if (lignes && lignes.length > 0) {
+      await db.insert(devisLignesTable).values(lignesValues(row.id, lignes));
+    }
     return row;
   });
 
   res.status(201).json(created);
+});
+
+devisRouter.get("/:id/lignes", async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  const [devis] = await db
+    .select()
+    .from(devisTable)
+    .where(and(eq(devisTable.id, req.params.id), eq(devisTable.licenceId, licenceId)))
+    .limit(1);
+  if (!devis) {
+    res.status(404).json({ error: "Devis introuvable" });
+    return;
+  }
+
+  const lignes = await db.select().from(devisLignesTable).where(eq(devisLignesTable.devisId, devis.id));
+  res.json(lignes.sort((a, b) => a.ordre - b.ordre));
+});
+
+// Remplace l'integralite des lignes (edition depuis un editeur cote client
+// qui envoie toujours l'etat complet) et recalcule montantHt. Reserve aux
+// devis BROUILLON — au-dela, les lignes font partie du contenu verrouille
+// (comme montantHt/objet). Le DELETE ici porte sur des sous-lignes d'un
+// brouillon encore editable, pas sur un document/enregistrement metier —
+// ce n'est pas une exception a la regle de non-suppression des devis eux-memes.
+devisRouter.put("/:id/lignes", async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  const parsed = z.object({ lignes: z.array(ligneInputSchema).min(1).max(200) }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Requete invalide", details: parsed.error.flatten() });
+    return;
+  }
+
+  const [devis] = await db
+    .select()
+    .from(devisTable)
+    .where(and(eq(devisTable.id, req.params.id), eq(devisTable.licenceId, licenceId)))
+    .limit(1);
+  if (!devis) {
+    res.status(404).json({ error: "Devis introuvable" });
+    return;
+  }
+  if (devis.statut !== "BROUILLON") {
+    res.status(423).json({ error: "Devis verrouille (deja envoye) — les lignes ne sont plus modifiables" });
+    return;
+  }
+
+  await db.delete(devisLignesTable).where(eq(devisLignesTable.devisId, devis.id));
+  const inserted = await db.insert(devisLignesTable).values(lignesValues(devis.id, parsed.data.lignes)).returning();
+
+  const montantHt = totalLignesHt(parsed.data.lignes);
+  const [updatedDevis] = await db
+    .update(devisTable)
+    .set({ montantHt: montantHt.toString(), updatedAt: new Date() })
+    .where(eq(devisTable.id, devis.id))
+    .returning();
+
+  res.json({ devis: updatedDevis, lignes: inserted.sort((a, b) => a.ordre - b.ordre) });
 });
 
 devisRouter.get("/:id", async (req, res) => {
@@ -109,6 +208,7 @@ devisRouter.get("/:id/pdf", async (req, res) => {
     montantHt: Number(devis.montantHt),
     tauxTva: Number(devis.tauxTva),
     licence: licenceToPdfInfo(licence),
+    lignes: await toPdfLignes(devis.id),
   });
 });
 
@@ -219,6 +319,7 @@ devisRouter.post("/:id/statut", async (req, res) => {
         montantHt: Number(updated.montantHt),
         tauxTva: Number(updated.tauxTva),
         licence: licenceToPdfInfo(licence),
+        lignes: await toPdfLignes(updated.id),
       });
       await sendMail({
         to: updated.clientEmail,
@@ -264,6 +365,8 @@ devisRouter.post("/:id/convertir-facture", async (req, res) => {
     return;
   }
 
+  const devisLignes = await db.select().from(devisLignesTable).where(eq(devisLignesTable.devisId, devis.id));
+
   const facture = await withNumero("factures", "FAC", licenceId, async (numero) => {
     const [row] = await db
       .insert(facturesTable)
@@ -279,6 +382,22 @@ devisRouter.post("/:id/convertir-facture", async (req, res) => {
         tauxTva: devis.tauxTva,
       })
       .returning();
+    // Copie les lignes du devis vers la facture (chacune conserve sa propre
+    // vie ensuite : modifier une facture ne doit jamais alterer son devis
+    // d'origine, deja verrouille de toute facon).
+    if (devisLignes.length > 0) {
+      await db.insert(factureLignesTable).values(
+        devisLignes.map((l) => ({
+          factureId: row.id,
+          ordre: l.ordre,
+          designation: l.designation,
+          quantite: l.quantite,
+          unite: l.unite,
+          prixUnitaireHt: l.prixUnitaireHt,
+          remisePercent: l.remisePercent,
+        })),
+      );
+    }
     return row;
   });
 
