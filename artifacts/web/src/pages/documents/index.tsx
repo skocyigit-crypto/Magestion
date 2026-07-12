@@ -14,6 +14,8 @@ import {
   listDocuments,
   updateDocument,
   uploadDocument,
+  verifierIntegriteDocument,
+  verrouillerDocument,
   type DocumentItem,
   type DocumentType,
   type EntityType,
@@ -64,12 +66,13 @@ export default function DocumentsPage() {
   }
 
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [type, setType] = useState<DocumentType>("AUTRE");
+  const [type, setType] = useState<DocumentType | "AUTO">("AUTO");
   const [dateExpiration, setDateExpiration] = useState("");
   const [entityForm, setEntityForm] = useState<EntityForm>(EMPTY_ENTITY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [integriteResult, setIntegriteResult] = useState<{ id: string; intact: boolean } | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{ nom: string; type: DocumentType; dateExpiration: string }>({
@@ -108,7 +111,7 @@ export default function DocumentsPage() {
     setError(null);
     try {
       await uploadDocument(file, {
-        type,
+        type: type === "AUTO" ? undefined : type,
         dateExpiration: dateExpiration || undefined,
         entityType: entityForm.entityType,
         entityId: entityForm.entityId || undefined,
@@ -116,7 +119,7 @@ export default function DocumentsPage() {
       await queryClient.invalidateQueries({ queryKey: ["documents"] });
       setIsUploadOpen(false);
       setDateExpiration("");
-      setType("AUTRE");
+      setType("AUTO");
       setEntityForm(EMPTY_ENTITY);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
@@ -124,6 +127,17 @@ export default function DocumentsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleVerrouiller(d: DocumentItem) {
+    if (!confirm(`Verrouiller definitivement "${d.nom}" ? Cette action est irreversible : plus aucune modification ne sera possible.`)) return;
+    await verrouillerDocument(d.id);
+    await queryClient.invalidateQueries({ queryKey: ["documents"] });
+  }
+
+  async function handleVerifierIntegrite(d: DocumentItem) {
+    const result = await verifierIntegriteDocument(d.id);
+    setIntegriteResult({ id: d.id, intact: result.intact });
   }
 
   function openEdit(d: DocumentItem) {
@@ -224,18 +238,31 @@ export default function DocumentsPage() {
                 const jours = joursRestants(d.dateExpiration);
                 return (
                   <tr key={d.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${d.active ? "" : "opacity-60"}`}>
-                    <td className="px-4 py-2">{d.nom}</td>
+                    <td className="px-4 py-2">
+                      {d.nom}
+                      {d.verrouille && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground" title="Verrouille (WORM) — non modifiable">🔒</span>}
+                      {d.classificationIa && <span className="ml-2 rounded bg-blue-950/40 px-1.5 py-0.5 text-xs text-blue-400" title="Classe automatiquement par IA">IA</span>}
+                      {integriteResult?.id === d.id && (
+                        <span className={`ml-2 text-xs ${integriteResult.intact ? "text-emerald-400" : "text-red-400"}`}>
+                          {integriteResult.intact ? "Integrite verifiee" : "ALTERE — empreinte differente !"}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-2">{TYPE_LABELS[d.type]}</td>
                     <td className="px-4 py-2 text-muted-foreground">{entityLabel(d)}</td>
                     <td className="px-4 py-2">{formatTaille(d.tailleOctets)}</td>
                     <td className={`px-4 py-2 ${jours !== null && jours <= 30 ? "text-orange-400" : ""}`}>{d.dateExpiration ?? "—"}</td>
                     <td className="px-4 py-2">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex flex-wrap justify-end gap-2">
                         <Button size="sm" variant="outline" onClick={() => downloadDocument(d.id, d.nom)}>Telecharger</Button>
-                        <Button size="sm" variant="outline" onClick={() => openEdit(d)}>Modifier</Button>
-                        <Button size="sm" variant="outline" onClick={() => handleToggleActive(d)}>
-                          {d.active ? "Archiver" : "Reactiver"}
-                        </Button>
+                        {!d.verrouille && <Button size="sm" variant="outline" onClick={() => openEdit(d)}>Modifier</Button>}
+                        {!d.verrouille && (
+                          <Button size="sm" variant="outline" onClick={() => handleToggleActive(d)}>
+                            {d.active ? "Archiver" : "Reactiver"}
+                          </Button>
+                        )}
+                        {!d.verrouille && <Button size="sm" variant="outline" onClick={() => handleVerrouiller(d)}>Verrouiller</Button>}
+                        {d.verrouille && <Button size="sm" variant="outline" onClick={() => handleVerifierIntegrite(d)}>Verifier l'integrite</Button>}
                       </div>
                     </td>
                   </tr>
@@ -262,12 +289,16 @@ export default function DocumentsPage() {
               id="type"
               className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
               value={type}
-              onChange={(e) => setType(e.target.value as DocumentType)}
+              onChange={(e) => setType(e.target.value as DocumentType | "AUTO")}
             >
+              <option value="AUTO">Detection automatique (IA)</option>
               {Object.entries(TYPE_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+            {type === "AUTO" && (
+              <p className="text-xs text-muted-foreground">Le type, le nom et une eventuelle date d'expiration seront suggeres a partir du contenu du fichier (image/PDF). Sans IA configuree, le document est classe "Autre" comme avant.</p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">

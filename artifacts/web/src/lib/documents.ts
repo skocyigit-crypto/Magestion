@@ -13,6 +13,11 @@ export interface DocumentItem {
   tailleOctets: number;
   mimeType: string | null;
   dateExpiration: string | null;
+  verrouille: boolean;
+  verrouilleAt: string | null;
+  verrouillePar: string | null;
+  hashSha256: string | null;
+  classificationIa: boolean;
   active: boolean;
   createdAt: string;
 }
@@ -76,6 +81,16 @@ export interface DocumentUpdateInput {
 
 export function updateDocument(id: string, input: DocumentUpdateInput) {
   return apiFetch<DocumentItem>(`/documents/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+// Verrouillage WORM definitif — aucune fonction "deverrouiller" n'existe cote
+// backend, c'est intentionnel (voir routes/documents.ts).
+export function verrouillerDocument(id: string) {
+  return apiFetch<DocumentItem>(`/documents/${id}/verrouiller`, { method: "POST" });
+}
+
+export function verifierIntegriteDocument(id: string) {
+  return apiFetch<{ intact: boolean; hashReference: string; hashActuel: string }>(`/documents/${id}/verifier-integrite`);
 }
 
 export const TYPE_LABELS: Record<DocumentType, string> = {
