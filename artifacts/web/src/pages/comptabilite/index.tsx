@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { annulerLettrage, downloadFec, lettrer, listBalance, listEcrituresNonLettrees, listJournal, listPlanComptable } from "@/lib/comptabilite";
+import { calculerTva, creerDeclarationTva, listDeclarationsTva, validerDeclarationTva, type TvaCalcul } from "@/lib/declarationsTva";
 
 const fmt = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-type Tab = "journal" | "balance" | "plan" | "lettrage";
+type Tab = "journal" | "balance" | "plan" | "lettrage" | "tva";
 
 export default function ComptabilitePage() {
   const queryClient = useQueryClient();
@@ -56,6 +57,45 @@ export default function ComptabilitePage() {
   async function handleAnnulerLettrage(code: string) {
     await annulerLettrage(code);
     await queryClient.invalidateQueries({ queryKey: ["comptabilite"] });
+  }
+
+  const { data: declarationsTva } = useQuery({ queryKey: ["declarations-tva"], queryFn: listDeclarationsTva });
+  const [periodeDebut, setPeriodeDebut] = useState("");
+  const [periodeFin, setPeriodeFin] = useState("");
+  const [apercu, setApercu] = useState<TvaCalcul | null>(null);
+  const [tvaBusy, setTvaBusy] = useState(false);
+  const [tvaError, setTvaError] = useState<string | null>(null);
+
+  async function handleCalculerApercu() {
+    if (!periodeDebut || !periodeFin) return;
+    setTvaError(null);
+    try {
+      setApercu(await calculerTva(periodeDebut, periodeFin));
+    } catch (err) {
+      setTvaError(err instanceof Error ? err.message : "Erreur");
+    }
+  }
+
+  async function handleCreerDeclaration() {
+    if (!periodeDebut || !periodeFin) return;
+    setTvaBusy(true);
+    setTvaError(null);
+    try {
+      await creerDeclarationTva(periodeDebut, periodeFin);
+      setApercu(null);
+      setPeriodeDebut("");
+      setPeriodeFin("");
+      await queryClient.invalidateQueries({ queryKey: ["declarations-tva"] });
+    } catch (err) {
+      setTvaError(err instanceof Error ? err.message : "Erreur");
+    } finally {
+      setTvaBusy(false);
+    }
+  }
+
+  async function handleValiderDeclaration(id: string) {
+    await validerDeclarationTva(id);
+    await queryClient.invalidateQueries({ queryKey: ["declarations-tva"] });
   }
 
   const { data: journal, isLoading: journalLoading, isError: journalError } = useQuery({ queryKey: ["comptabilite", "journal"], queryFn: listJournal });
@@ -139,6 +179,9 @@ export default function ComptabilitePage() {
           </Button>
           <Button variant={tab === "lettrage" ? "default" : "outline"} size="sm" onClick={() => setTab("lettrage")}>
             Lettrage
+          </Button>
+          <Button variant={tab === "tva" ? "default" : "outline"} size="sm" onClick={() => setTab("tva")}>
+            Declarations TVA
           </Button>
         </div>
 
@@ -309,6 +352,77 @@ export default function ComptabilitePage() {
             )}
             {lettrageError && <p className="mt-2 text-sm text-red-400">{lettrageError}</p>}
             {lettrageNotice && <p className="mt-2 text-sm text-emerald-400">{lettrageNotice}</p>}
+          </>
+        )}
+
+        {tab === "tva" && (
+          <>
+            <Card className="mb-6">
+              <CardHeader><CardTitle>Nouvelle declaration</CardTitle></CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">Debut de periode</label>
+                    <Input type="date" className="w-40" value={periodeDebut} onChange={(e) => setPeriodeDebut(e.target.value)} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">Fin de periode</label>
+                    <Input type="date" className="w-40" value={periodeFin} onChange={(e) => setPeriodeFin(e.target.value)} />
+                  </div>
+                  <Button variant="outline" size="sm" onClick={handleCalculerApercu}>Calculer un apercu</Button>
+                </div>
+                {apercu && (
+                  <div className="grid grid-cols-3 gap-4 rounded-md bg-muted/30 p-3 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">TVA collectee</p>
+                      <p className="text-lg font-semibold">{fmt(apercu.tvaCollectee)} €</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">TVA deductible</p>
+                      <p className="text-lg font-semibold">{fmt(apercu.tvaDeductible)} €</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">TVA a payer</p>
+                      <p className={`text-lg font-semibold ${apercu.tvaAPayer < 0 ? "text-emerald-400" : ""}`}>{fmt(apercu.tvaAPayer)} €</p>
+                    </div>
+                  </div>
+                )}
+                {apercu && <Button size="sm" onClick={handleCreerDeclaration} disabled={tvaBusy}>{tvaBusy ? "Enregistrement..." : "Enregistrer cette declaration"}</Button>}
+                {tvaError && <p className="text-sm text-red-400">{tvaError}</p>}
+              </CardContent>
+            </Card>
+
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="px-3 py-2">Periode</th>
+                    <th className="px-3 py-2 text-right">TVA collectee</th>
+                    <th className="px-3 py-2 text-right">TVA deductible</th>
+                    <th className="px-3 py-2 text-right">TVA a payer</th>
+                    <th className="px-3 py-2">Statut</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(declarationsTva ?? []).map((d) => (
+                    <tr key={d.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-3 py-2">{d.periodeDebut} → {d.periodeFin}</td>
+                      <td className="px-3 py-2 text-right">{fmt(Number(d.tvaCollectee))} €</td>
+                      <td className="px-3 py-2 text-right">{fmt(Number(d.tvaDeductible))} €</td>
+                      <td className="px-3 py-2 text-right font-medium">{fmt(Number(d.tvaAPayer))} €</td>
+                      <td className="px-3 py-2">{d.statut === "VALIDEE" ? "Validee" : "Brouillon"}</td>
+                      <td className="px-3 py-2">
+                        {d.statut === "BROUILLON" && <Button size="sm" onClick={() => handleValiderDeclaration(d.id)}>Valider</Button>}
+                      </td>
+                    </tr>
+                  ))}
+                  {(declarationsTva ?? []).length === 0 && (
+                    <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aucune declaration pour le moment.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </div>
