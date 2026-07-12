@@ -28,3 +28,4 @@ export * from "./locationsMateriel.js";
 export * from "./prorata.js";
 export * from "./lignes.js";
 export * from "./avoirs.js";
+export * from "./retenuesLiberations.js";
