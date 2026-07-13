@@ -1,8 +1,7 @@
 import PDFDocument from "pdfkit";
 import type { Response } from "express";
-import { join } from "node:path";
 import type { licencesTable } from "@magestion/db";
-import { STORAGE_DIR } from "./storage.js";
+import { storageAdapter } from "./storage.js";
 
 interface LicenceInfo {
   nom: string;
@@ -13,12 +12,24 @@ interface LicenceInfo {
   email: string | null;
   telephone: string | null;
   tvaIntracommunautaire: string | null;
-  logoAbsolutePath: string | null;
+  logoBuffer: Buffer | null;
 }
 
 // Mappe la ligne licence brute (DB) vers les champs attendus par le PDF —
 // partage entre devis.ts et factures.ts pour eviter 4 copies divergentes.
-export function licenceToPdfInfo(licence: typeof licencesTable.$inferSelect | undefined): LicenceInfo {
+// Async : le logo est lu via storageAdapter (disque local ou Google Cloud
+// Storage, voir lib/storage.ts) — doc.image() de pdfkit accepte un Buffer
+// directement, portable entre les deux backends sans chemin de fichier local.
+export async function licenceToPdfInfo(licence: typeof licencesTable.$inferSelect | undefined): Promise<LicenceInfo> {
+  let logoBuffer: Buffer | null = null;
+  if (licence?.logoChemin) {
+    try {
+      logoBuffer = await storageAdapter.readBuffer(licence.logoChemin);
+    } catch {
+      // Logo illisible/absent : le PDF se genere quand meme, sans logo.
+    }
+  }
+
   return {
     nom: licence?.nom ?? "",
     siret: licence?.siret ?? null,
@@ -28,7 +39,7 @@ export function licenceToPdfInfo(licence: typeof licencesTable.$inferSelect | un
     email: licence?.email ?? null,
     telephone: licence?.telephone ?? null,
     tvaIntracommunautaire: licence?.tvaIntracommunautaire ?? null,
-    logoAbsolutePath: licence?.logoChemin ? join(STORAGE_DIR, licence.logoChemin) : null,
+    logoBuffer,
   };
 }
 
@@ -72,9 +83,9 @@ function drawDocument(doc: PDFKit.PDFDocument, data: DocumentPdfData) {
   const montantTtc = data.montantHt + montantTva;
 
   // --- En-tete emetteur ---
-  if (data.licence.logoAbsolutePath) {
+  if (data.licence.logoBuffer) {
     try {
-      doc.image(data.licence.logoAbsolutePath, 450, 45, { fit: [100, 60] });
+      doc.image(data.licence.logoBuffer, 450, 45, { fit: [100, 60] });
     } catch {
       // Fichier logo illisible/corrompu : on ne bloque jamais la generation du PDF pour ca.
     }
@@ -92,7 +103,7 @@ function drawDocument(doc: PDFKit.PDFDocument, data: DocumentPdfData) {
   // Garantit un espace minimal avant le titre, sinon un en-tete societe court
   // (peu de champs renseignes) laisse le titre chevaucher le logo (zone fixe
   // en haut a droite, hauteur jusqu'a 45+60=105).
-  if (data.licence.logoAbsolutePath) doc.y = Math.max(doc.y, 115);
+  if (data.licence.logoBuffer) doc.y = Math.max(doc.y, 115);
   doc.moveDown(1.5);
   const titre = data.type === "DEVIS" ? "DEVIS" : data.type === "AVOIR" ? "AVOIR" : "FACTURE";
   doc.fontSize(20).font("Helvetica-Bold").text(`${titre} N° ${data.numero}`, { align: "right" });

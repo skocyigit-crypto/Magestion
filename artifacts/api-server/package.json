@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.21.0",
     "@magestion/db": "workspace:*",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",

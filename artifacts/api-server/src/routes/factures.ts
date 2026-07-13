@@ -209,7 +209,7 @@ facturesRouter.get("/:id/pdf", async (req, res) => {
     objet: facture.objet,
     montantHt: Number(facture.montantHt),
     tauxTva: Number(facture.tauxTva),
-    licence: licenceToPdfInfo(licence),
+    licence: await licenceToPdfInfo(licence),
     lignes: await toPdfLignes(facture.id),
   });
 });
@@ -341,7 +341,7 @@ facturesRouter.post("/:id/statut", async (req, res) => {
           objet: updated.objet,
           montantHt: Number(updated.montantHt),
           tauxTva: Number(updated.tauxTva),
-          licence: licenceToPdfInfo(licence),
+          licence: await licenceToPdfInfo(licence),
           lignes: await toPdfLignes(updated.id),
         });
         await sendMail({

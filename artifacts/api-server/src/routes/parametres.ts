@@ -2,15 +2,13 @@ import { Router } from "express";
 import multer from "multer";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { mkdirSync, unlinkSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, licencesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
 import { isValidSiret } from "../lib/siret.js";
-import { STORAGE_DIR } from "../lib/storage.js";
+import { storageAdapter } from "../lib/storage.js";
 
 export const parametresRouter = Router();
 
@@ -118,22 +116,15 @@ parametresRouter.post("/logo", logoUpload.single("logo"), async (req, res) => {
 
   const [existing] = await db.select().from(licencesTable).where(eq(licencesTable.id, licenceId)).limit(1);
 
-  const dir = join(STORAGE_DIR, licenceId);
-  mkdirSync(dir, { recursive: true });
   const filename = `logo-${randomUUID()}.${ext}`;
-  const fullPath = join(dir, filename);
-  await writeFile(fullPath, req.file.buffer);
+  const logoChemin = join(licenceId, filename);
+  await storageAdapter.save(logoChemin, req.file.buffer);
 
   // Nettoie l'ancien fichier physique (jamais garder de fichiers orphelins sur disque).
   if (existing?.logoChemin) {
-    try {
-      unlinkSync(join(STORAGE_DIR, existing.logoChemin));
-    } catch {
-      // Fichier deja absent : rien a faire.
-    }
+    await storageAdapter.remove(existing.logoChemin);
   }
 
-  const logoChemin = join(licenceId, filename);
   const [updated] = await db
     .update(licencesTable)
     .set({ logoChemin, updatedAt: new Date() })
@@ -155,5 +146,5 @@ parametresRouter.get("/logo", async (req, res) => {
 
   const ext = licence.logoChemin.split(".").pop() ?? "";
   res.setHeader("Content-Type", LOGO_EXT_TO_CONTENT_TYPE[ext] ?? "application/octet-stream");
-  res.sendFile(join(STORAGE_DIR, licence.logoChemin));
+  storageAdapter.sendFile(licence.logoChemin, res);
 });

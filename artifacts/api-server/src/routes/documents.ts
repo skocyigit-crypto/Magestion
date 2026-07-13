@@ -2,13 +2,12 @@ import { Router } from "express";
 import multer from "multer";
 import { randomUUID, createHash } from "node:crypto";
 import { join } from "node:path";
-import { mkdirSync, createReadStream } from "node:fs";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { db, documentsTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
-import { STORAGE_DIR } from "../lib/storage.js";
+import { storageAdapter } from "../lib/storage.js";
 import { extractJsonFromImage, GeminiNotConfiguredError } from "../lib/gemini.js";
 
 export const documentsRouter = Router();
@@ -23,25 +22,10 @@ function canAccessConfidentiel(role: string): boolean {
   return role === "SUPER_ADMIN" || role === "COMPTABILITE";
 }
 
-const storage = multer.diskStorage({
-  destination: (req, _file, cb) => {
-    const licenceId = req.user?.licenceId;
-    if (!licenceId) {
-      cb(new Error("Non authentifie"), "");
-      return;
-    }
-    const dir = join(STORAGE_DIR, licenceId);
-    mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (_req, file, cb) => {
-    // Nom physique aleatoire (jamais le nom original) : evite path traversal
-    // et collisions ; le nom d'origine est conserve en base (documents.nom).
-    cb(null, `${randomUUID()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`);
-  },
-});
-
-const upload = multer({ storage, limits: { fileSize: MAX_SIZE } });
+// Buffer en memoire (pas multer.diskStorage) : le fichier est ensuite ecrit
+// via storageAdapter, portable disque local (dev) / Google Cloud Storage
+// (prod, voir lib/storage.ts) sans dupliquer la logique d'upload.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_SIZE } });
 
 const TYPE_ENUM = z.enum(["CONTRAT", "ASSURANCE", "PERMIS", "FACTURE", "PLAN", "AUTRE"]);
 const ENTITY_TYPE_ENUM = z.enum(["PROJECT", "EMPLOYEE", "VEHICLE", "SOUS_TRAITANT", "GENERAL"]);
@@ -122,10 +106,14 @@ documentsRouter.post("/", upload.single("file"), async (req, res) => {
   // choix humain).
   let suggested: Awaited<ReturnType<typeof tryClassifyDocument>> = null;
   if (!parsed.data.type) {
-    const { readFile } = await import("node:fs/promises");
-    const buffer = await readFile(join(STORAGE_DIR, licenceId, req.file.filename));
-    suggested = await tryClassifyDocument(buffer, req.file.mimetype);
+    suggested = await tryClassifyDocument(req.file.buffer, req.file.mimetype);
   }
+
+  // Nom physique aleatoire (jamais le nom original) : evite path traversal
+  // et collisions ; le nom d'origine est conserve en base (documents.nom).
+  const filename = `${randomUUID()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  const cheminFichier = join(licenceId, filename);
+  await storageAdapter.save(cheminFichier, req.file.buffer);
 
   const [created] = await db
     .insert(documentsTable)
@@ -135,8 +123,7 @@ documentsRouter.post("/", upload.single("file"), async (req, res) => {
       type: parsed.data.type || suggested?.type,
       entityType: parsed.data.entityType,
       entityId: parsed.data.entityId,
-      // Chemin relatif a STORAGE_DIR (portable) : <licenceId>/<nom-physique>.
-      cheminFichier: join(licenceId, req.file.filename),
+      cheminFichier,
       tailleOctets: req.file.size,
       mimeType: req.file.mimetype,
       dateExpiration: parsed.data.dateExpiration || suggested?.dateExpiration || undefined,
@@ -166,7 +153,7 @@ documentsRouter.get("/:id/download", async (req, res) => {
     return;
   }
 
-  res.download(join(STORAGE_DIR, doc.cheminFichier), doc.nom);
+  storageAdapter.sendFile(doc.cheminFichier, res, doc.nom);
 });
 
 const documentUpdateSchema = z.object({
@@ -247,13 +234,8 @@ documentsRouter.post("/:id/verrouiller", async (req, res) => {
     return;
   }
 
-  const hash = await new Promise<string>((resolve, reject) => {
-    const h = createHash("sha256");
-    const stream = createReadStream(join(STORAGE_DIR, doc.cheminFichier));
-    stream.on("data", (chunk) => h.update(chunk));
-    stream.on("end", () => resolve(h.digest("hex")));
-    stream.on("error", reject);
-  });
+  const buffer = await storageAdapter.readBuffer(doc.cheminFichier);
+  const hash = createHash("sha256").update(buffer).digest("hex");
 
   const [updated] = await db
     .update(documentsTable)
@@ -288,13 +270,8 @@ documentsRouter.get("/:id/verifier-integrite", async (req, res) => {
     return;
   }
 
-  const currentHash = await new Promise<string>((resolve, reject) => {
-    const h = createHash("sha256");
-    const stream = createReadStream(join(STORAGE_DIR, doc.cheminFichier));
-    stream.on("data", (chunk) => h.update(chunk));
-    stream.on("end", () => resolve(h.digest("hex")));
-    stream.on("error", reject);
-  });
+  const currentBuffer = await storageAdapter.readBuffer(doc.cheminFichier);
+  const currentHash = createHash("sha256").update(currentBuffer).digest("hex");
 
   res.json({ intact: currentHash === doc.hashSha256, hashReference: doc.hashSha256, hashActuel: currentHash });
 });

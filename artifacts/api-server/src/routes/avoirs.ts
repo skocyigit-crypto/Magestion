@@ -205,7 +205,7 @@ avoirsRouter.get("/:id/pdf", async (req, res) => {
     objet: `${avoir.motif} (suite a la facture ${facture?.numero ?? "?"})`,
     montantHt: Number(avoir.montantHt),
     tauxTva: Number(avoir.tauxTva),
-    licence: licenceToPdfInfo(licence),
+    licence: await licenceToPdfInfo(licence),
     lignes: await toPdfLignes(avoir.id),
   });
 });
