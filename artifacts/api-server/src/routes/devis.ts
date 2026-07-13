@@ -207,7 +207,7 @@ devisRouter.get("/:id/pdf", async (req, res) => {
     objet: devis.objet,
     montantHt: Number(devis.montantHt),
     tauxTva: Number(devis.tauxTva),
-    licence: licenceToPdfInfo(licence),
+    licence: await licenceToPdfInfo(licence),
     lignes: await toPdfLignes(devis.id),
   });
 });
@@ -318,7 +318,7 @@ devisRouter.post("/:id/statut", async (req, res) => {
         objet: updated.objet,
         montantHt: Number(updated.montantHt),
         tauxTva: Number(updated.tauxTva),
-        licence: licenceToPdfInfo(licence),
+        licence: await licenceToPdfInfo(licence),
         lignes: await toPdfLignes(updated.id),
       });
       await sendMail({
