@@ -6,7 +6,7 @@ import { db } from "@magestion/db";
 // compteur dedie — suffisant pour le volume attendu en phase 1).
 // tableName est TOUJOURS une constante interne ("devis"/"factures"), jamais
 // une valeur utilisateur — sql.raw() sur un identifiant fixe est sans risque.
-export async function nextNumero(tableName: "devis" | "factures" | "avoirs", prefix: string, licenceId: string): Promise<string> {
+export async function nextNumero(tableName: "devis" | "factures" | "avoirs" | "marches_publics", prefix: string, licenceId: string): Promise<string> {
   const year = new Date().getFullYear();
   const result = await db.execute(
     sql`SELECT COUNT(*)::text as count FROM ${sql.raw(tableName)} WHERE licence_id = ${licenceId} AND EXTRACT(YEAR FROM created_at) = ${year}`,
@@ -26,7 +26,7 @@ export async function nextNumero(tableName: "devis" | "factures" | "avoirs", pre
 // produire silencieusement un doublon (obligation legale de continuite de
 // numerotation des devis/factures).
 export async function withNumero<T>(
-  tableName: "devis" | "factures" | "avoirs",
+  tableName: "devis" | "factures" | "avoirs" | "marches_publics",
   prefix: string,
   licenceId: string,
   insert: (numero: string) => Promise<T>,

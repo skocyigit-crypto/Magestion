@@ -46,6 +46,21 @@ export function updateProject(id: string, input: Partial<ProjectInput> & { statu
   return apiFetch<Project>(`/projects/${id}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
+export interface ProjectRentabilite {
+  revenuHt: number;
+  coutMateriauxHt: number;
+  coutMainOeuvreHt: number;
+  coutTotalHt: number;
+  margeReelleHt: number;
+  margeReellePercent: number | null;
+  heuresTravaillees: number;
+  objectifMargePercent: number;
+}
+
+export function getProjectRentabilite(id: string) {
+  return apiFetch<ProjectRentabilite>(`/projects/${id}/rentabilite`);
+}
+
 export const CATEGORIE_LABELS: Record<ProjectCategorie, string> = {
   RENOVATION: "Renovation",
   CONSTRUCTION_NEUVE: "Construction neuve",

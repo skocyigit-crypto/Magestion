@@ -33,6 +33,7 @@ const NAV_GROUPS: (NavLink | NavGroup)[] = [
       { href: "/avoirs", label: "Avoirs" },
       { href: "/depenses", label: "Depenses" },
       { href: "/commandes", label: "Commandes" },
+      { href: "/demandes-achat", label: "Demandes d'achat" },
       { href: "/fournisseurs", label: "Fournisseurs" },
       { href: "/situations", label: "Situations" },
       { href: "/comptabilite", label: "Comptabilite" },
@@ -48,6 +49,8 @@ const NAV_GROUPS: (NavLink | NavGroup)[] = [
       { href: "/planning-personnel", label: "Planning" },
       { href: "/securite", label: "Securite" },
       { href: "/notes-de-frais", label: "Notes de frais" },
+      { href: "/gestion-dechets", label: "Gestion des dechets" },
+      { href: "/bilan-carbone", label: "Bilan carbone" },
     ],
   },
   {
@@ -61,6 +64,16 @@ const NAV_GROUPS: (NavLink | NavGroup)[] = [
       { href: "/vehicules", label: "Vehicules" },
       { href: "/locations-materiel", label: "Locations de materiel" },
       { href: "/import-ia", label: "Import IA" },
+      { href: "/assistant-ia", label: "Assistant IA" },
+    ],
+  },
+  {
+    label: "Marches publics",
+    items: [
+      { href: "/appels-offres", label: "Appels d'offres" },
+      { href: "/marches-publics", label: "Marches publics" },
+      { href: "/archives-decennales", label: "Archives decennales" },
+      { href: "/indices-bt", label: "Indices BT/TP" },
     ],
   },
 ];

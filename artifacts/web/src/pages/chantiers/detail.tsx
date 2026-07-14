@@ -11,6 +11,7 @@ import {
   CATEGORIE_LABELS,
   STATUT_LABELS,
   getProject,
+  getProjectRentabilite,
   updateProject,
   type ProjectCategorie,
   type ProjectInput,
@@ -25,6 +26,14 @@ import { listSousTraitants } from "@/lib/sousTraitants";
 import { ajouterCharge, ajouterParticipant, archiverCharge, getProrata, retirerParticipant } from "@/lib/prorata";
 import { getRetenueGarantie, libererRetenue } from "@/lib/retenuesGarantie";
 import { createChantierPhase, listChantierPhases, updateChantierPhase, type ChantierPhaseInput } from "@/lib/chantierPlanning";
+import {
+  STATUT_LABELS as SOUS_CHANTIER_STATUT_LABELS,
+  createSousChantier,
+  listSousChantiers,
+  updateSousChantier,
+  type SousChantierInput,
+  type SousChantierStatut,
+} from "@/lib/sousChantiers";
 
 export default function ChantierDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -43,6 +52,40 @@ export default function ChantierDetailPage() {
   const { data: prorata, refetch: refetchProrata } = useQuery({ queryKey: ["prorata", id], queryFn: () => getProrata(id) });
   const { data: retenueGarantie, refetch: refetchRetenue } = useQuery({ queryKey: ["retenue-garantie", id], queryFn: () => getRetenueGarantie(id) });
   const { data: phases, refetch: refetchPhases } = useQuery({ queryKey: ["chantier-phases", id], queryFn: () => listChantierPhases(id) });
+  const { data: rentabilite } = useQuery({ queryKey: ["projects", id, "rentabilite"], queryFn: () => getProjectRentabilite(id) });
+  const { data: sousChantiers, refetch: refetchSousChantiers } = useQuery({ queryKey: ["sous-chantiers", id], queryFn: () => listSousChantiers(id) });
+
+  const EMPTY_SOUS_CHANTIER: Omit<SousChantierInput, "projectId"> = { nom: "" };
+  const [sousChantierForm, setSousChantierForm] = useState<Omit<SousChantierInput, "projectId">>(EMPTY_SOUS_CHANTIER);
+  const [sousChantierError, setSousChantierError] = useState<string | null>(null);
+
+  async function handleAjouterSousChantier(e: React.FormEvent) {
+    e.preventDefault();
+    if (!sousChantierForm.nom) return;
+    setSousChantierError(null);
+    try {
+      await createSousChantier({ projectId: id, ...sousChantierForm });
+      setSousChantierForm(EMPTY_SOUS_CHANTIER);
+      await refetchSousChantiers();
+    } catch (err) {
+      setSousChantierError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
+    }
+  }
+
+  async function handleSousChantierAvancement(scId: string, avancementPercent: number) {
+    await updateSousChantier(scId, { avancementPercent });
+    await refetchSousChantiers();
+  }
+
+  async function handleSousChantierStatut(scId: string, statut: SousChantierStatut) {
+    await updateSousChantier(scId, { statut });
+    await refetchSousChantiers();
+  }
+
+  async function handleToggleSousChantierActive(scId: string, active: boolean) {
+    await updateSousChantier(scId, { active: !active });
+    await refetchSousChantiers();
+  }
 
   const devisForProject = (devisList ?? []).filter((d) => d.projectId === id);
   const facturesForProject = (facturesList ?? []).filter((f) => f.projectId === id);
@@ -270,6 +313,44 @@ export default function ChantierDetailPage() {
           );
         })()}
 
+        {rentabilite && (
+          <Card className="mb-6">
+            <CardHeader><CardTitle>Rentabilite reelle</CardTitle></CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+                <div>
+                  <p className="text-muted-foreground">Chiffre d'affaires facture</p>
+                  <p className="text-lg font-semibold">{rentabilite.revenuHt.toLocaleString("fr-FR")} €</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Cout materiaux/sous-traitance</p>
+                  <p className="text-lg font-semibold">{rentabilite.coutMateriauxHt.toLocaleString("fr-FR")} €</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Cout main d'oeuvre ({rentabilite.heuresTravaillees.toFixed(1)} h)</p>
+                  <p className="text-lg font-semibold">{rentabilite.coutMainOeuvreHt.toLocaleString("fr-FR")} €</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Marge reelle</p>
+                  <p className={`text-lg font-semibold ${rentabilite.margeReelleHt < 0 ? "text-red-400" : "text-emerald-400"}`}>
+                    {rentabilite.margeReelleHt.toLocaleString("fr-FR")} €
+                    {rentabilite.margeReellePercent !== null && ` (${rentabilite.margeReellePercent.toFixed(1)}%)`}
+                  </p>
+                </div>
+              </div>
+              {rentabilite.margeReellePercent !== null && (
+                <p className={`text-sm ${rentabilite.margeReellePercent < rentabilite.objectifMargePercent ? "text-orange-400" : "text-muted-foreground"}`}>
+                  Objectif de marge : {rentabilite.objectifMargePercent}%
+                  {rentabilite.margeReellePercent < rentabilite.objectifMargePercent ? " — en dessous de l'objectif" : " — objectif atteint"}
+                </p>
+              )}
+              {rentabilite.revenuHt === 0 && (
+                <p className="text-xs text-muted-foreground">Aucune facture emise sur ce chantier — la marge reelle ne peut pas encore etre calculee.</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <h2 className="mb-3 mt-6 text-lg font-semibold">Planning (Gantt)</h2>
         <Card className="mb-6">
           <CardContent className="flex flex-col gap-4 pt-6">
@@ -341,6 +422,68 @@ export default function ChantierDetailPage() {
               <Button type="submit" size="sm" disabled={!phaseForm.nom || !phaseForm.dateDebut || !phaseForm.dateFin}>Ajouter une phase</Button>
             </form>
             {phaseError && <p className="text-sm text-red-400">{phaseError}</p>}
+          </CardContent>
+        </Card>
+
+        <h2 className="mb-3 mt-6 text-lg font-semibold">Sous-chantiers</h2>
+        <Card className="mb-6">
+          <CardContent className="flex flex-col gap-4 pt-6">
+            {(sousChantiers ?? []).length === 0 && <p className="text-sm text-muted-foreground">Aucun sous-chantier pour le moment (ex: batiments, lots, VRD pouvant avancer en parallele).</p>}
+            {(sousChantiers ?? []).map((sc) => (
+              <div key={sc.id} className={`flex flex-col gap-2 rounded-md border border-border p-3 ${sc.active ? "" : "opacity-50"}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">{sc.nom}</p>
+                    {sc.description && <p className="text-xs text-muted-foreground">{sc.description}</p>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="h-8 rounded-md border border-border bg-transparent px-2 text-xs"
+                      value={sc.statut}
+                      onChange={(e) => handleSousChantierStatut(sc.id, e.target.value as SousChantierStatut)}
+                    >
+                      {Object.entries(SOUS_CHANTIER_STATUT_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                    <Button size="sm" variant="outline" onClick={() => handleToggleSousChantierActive(sc.id, sc.active)}>
+                      {sc.active ? "Archiver" : "Reactiver"}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={Number(sc.avancementPercent)}
+                    onChange={(e) => handleSousChantierAvancement(sc.id, Number(e.target.value))}
+                    className="h-1.5 w-40"
+                  />
+                  <span className="text-xs text-muted-foreground">{Number(sc.avancementPercent)}%</span>
+                  {sc.budgetEstimeHt && <span className="text-xs text-muted-foreground">— Budget {Number(sc.budgetEstimeHt).toLocaleString("fr-FR")} €</span>}
+                </div>
+              </div>
+            ))}
+
+            <form onSubmit={handleAjouterSousChantier} className="mt-2 flex flex-wrap items-end gap-2 border-t border-border pt-4">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Nom</Label>
+                <Input className="h-9 w-48" placeholder="Batiment A" value={sousChantierForm.nom} onChange={(e) => setSousChantierForm({ ...sousChantierForm, nom: e.target.value })} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Budget estime HT</Label>
+                <Input
+                  className="h-9 w-32"
+                  type="number"
+                  min={0}
+                  value={sousChantierForm.budgetEstimeHt ?? ""}
+                  onChange={(e) => setSousChantierForm({ ...sousChantierForm, budgetEstimeHt: e.target.value ? Number(e.target.value) : undefined })}
+                />
+              </div>
+              <Button type="submit" size="sm" disabled={!sousChantierForm.nom}>Ajouter un sous-chantier</Button>
+            </form>
+            {sousChantierError && <p className="text-sm text-red-400">{sousChantierError}</p>}
           </CardContent>
         </Card>
 

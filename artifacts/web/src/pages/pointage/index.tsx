@@ -13,8 +13,10 @@ import {
   listPointage,
   pointerArrivee,
   pointerDepart,
+  pointerParReconnaissanceFaciale,
   updatePointage,
   type Pointage,
+  type ReconnaissanceFacialeResult,
 } from "@/lib/pointage";
 
 function todayStr() {
@@ -40,6 +42,28 @@ export default function PointagePage() {
   const [correctForm, setCorrectForm] = useState({ heureArrivee: "", heureDepart: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [faceScanning, setFaceScanning] = useState(false);
+  const [faceResult, setFaceResult] = useState<ReconnaissanceFacialeResult | null>(null);
+  const [faceError, setFaceError] = useState<string | null>(null);
+
+  async function handleFaceCapture(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setFaceScanning(true);
+    setFaceError(null);
+    setFaceResult(null);
+    try {
+      const result = await pointerParReconnaissanceFaciale(file);
+      setFaceResult(result);
+      if (result.matched) await queryClient.invalidateQueries({ queryKey: ["pointage"] });
+    } catch (err) {
+      setFaceError(err instanceof Error ? err.message : "Erreur reconnaissance faciale");
+    } finally {
+      setFaceScanning(false);
+    }
+  }
 
   const today = todayStr();
   const pointagesToday = (pointages ?? []).filter((p) => p.dateJour === today);
@@ -119,6 +143,32 @@ export default function PointagePage() {
             <CardContent><p className="text-2xl font-semibold">{(employees ?? []).length}</p></CardContent>
           </Card>
         </div>
+
+        <Card className="mb-6">
+          <CardHeader><CardTitle>Pointage par reconnaissance faciale</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <label className="w-fit">
+              <span className="inline-block cursor-pointer rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90">
+                {faceScanning ? "Analyse en cours..." : "Prendre une photo pour pointer"}
+              </span>
+              <input type="file" accept="image/*" capture="user" className="hidden" onChange={handleFaceCapture} disabled={faceScanning} />
+            </label>
+            <p className="text-xs text-muted-foreground">
+              Seuls les employes ayant consenti (fiche employe) et ayant une photo de reference sont candidats.
+            </p>
+            {faceResult && (
+              faceResult.matched ? (
+                <p className="text-sm text-green-400">
+                  {faceResult.employee?.prenom} {faceResult.employee?.nom} — {faceResult.action === "depart" ? "depart" : "arrivee"} enregistre(e)
+                  {" "}(confiance {faceResult.confidence}%).
+                </p>
+              ) : (
+                <p className="text-sm text-orange-400">Aucune correspondance trouvee (confiance {faceResult.confidence}%) — pointez manuellement.</p>
+              )
+            )}
+            {faceError && <p className="text-sm text-red-400">{faceError}</p>}
+          </CardContent>
+        </Card>
 
         {(employeesError || pointagesError) && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees. Verifiez votre connexion et reessayez.</p>}
 

@@ -32,10 +32,21 @@ const MODULE_ACCESS: Record<string, Partial<Record<Role, Access>>> = {
   agenda: { COMMERCIAL: "write" },
   relances: { COMMERCIAL: "write" },
   aiImport: { COMPTABILITE: "write", COMMERCIAL: "write", TERRAIN: "write" },
+  agent: { COMPTABILITE: "write", COMMERCIAL: "write", TERRAIN: "write" },
   notesDeFrais: { TERRAIN: "write", COMPTABILITE: "write" },
   locationsMateriel: { TERRAIN: "write", COMPTABILITE: "read" },
   prorata: { COMPTABILITE: "write", TERRAIN: "read" },
   analyticsCommercial: { COMMERCIAL: "write", COMPTABILITE: "read" },
+  appelsOffres: { COMMERCIAL: "write", COMPTABILITE: "read" },
+  marchesPublics: { COMMERCIAL: "write", COMPTABILITE: "write", TERRAIN: "read" },
+  executionMarche: { TERRAIN: "write", COMPTABILITE: "write", COMMERCIAL: "read" },
+  doeMarche: { TERRAIN: "write", COMMERCIAL: "read" },
+  archivesDecennales: { COMPTABILITE: "write", TERRAIN: "read" },
+  indicesBt: { COMPTABILITE: "write", COMMERCIAL: "read" },
+  budgetsPostes: { COMPTABILITE: "write" },
+  gestionDechets: { TERRAIN: "write", COMMERCIAL: "read" },
+  bilanCarbone: { TERRAIN: "write", COMPTABILITE: "read", COMMERCIAL: "read" },
+  demandesAchat: { TERRAIN: "write", COMPTABILITE: "write" },
   // "users" et "parametres" delibere absents : gestion des utilisateurs et
   // coordonnees legales de l'entreprise = SUPER_ADMIN uniquement (bypass
   // ligne 44), aucun autre role n'y a jamais acces, meme en lecture.

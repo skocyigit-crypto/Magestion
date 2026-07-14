@@ -9,6 +9,7 @@ import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
 import { authLimiter, aiLimiter } from "./lib/rateLimit.js";
 import { extractUser } from "./middleware/extractUser.js";
+import { checkLicenceGate } from "./middleware/checkLicenceGate.js";
 import { projectsRouter } from "./routes/projects.js";
 import { prospectsRouter } from "./routes/prospects.js";
 import { devisRouter } from "./routes/devis.js";
@@ -30,6 +31,7 @@ import { vehiclesRouter } from "./routes/vehicles.js";
 import { agendaRouter } from "./routes/agenda.js";
 import { relancesRouter } from "./routes/relances.js";
 import { aiImportRouter } from "./routes/aiImport.js";
+import { agentRouter } from "./routes/agent.js";
 import { usersRouter } from "./routes/users.js";
 import { parametresRouter } from "./routes/parametres.js";
 import { transactionsBancairesRouter } from "./routes/transactionsBancaires.js";
@@ -50,6 +52,20 @@ import { superAdminRouter } from "./routes/super-admin.js";
 import { tachesRouter } from "./routes/taches.js";
 import { clotureComptableRouter } from "./routes/clotureComptable.js";
 import { immobilisationsRouter } from "./routes/immobilisations.js";
+import { appelsOffresRouter } from "./routes/appelsOffres.js";
+import { marchesPublicsRouter } from "./routes/marchesPublics.js";
+import { lotsMarcheRouter } from "./routes/lotsMarche.js";
+import { executionMarcheRouter } from "./routes/executionMarche.js";
+import { doeMarcheRouter } from "./routes/doeMarche.js";
+import { archivesDecennalesRouter } from "./routes/archivesDecennales.js";
+import { indicesBtRouter } from "./routes/indicesBt.js";
+import { budgetsPostesRouter } from "./routes/budgetsPostes.js";
+import { tarifsFournisseursRouter } from "./routes/tarifsFournisseurs.js";
+import { gestionDechetsRouter } from "./routes/gestionDechets.js";
+import { bilanCarboneRouter } from "./routes/bilanCarbone.js";
+import { bonsLivraisonRouter } from "./routes/bonsLivraison.js";
+import { demandesAchatRouter } from "./routes/demandesAchat.js";
+import { sousChantiersRouter } from "./routes/sousChantiers.js";
 import { closeDb } from "@magestion/db";
 
 const app = express();
@@ -101,6 +117,12 @@ app.use("/api/auth", authLimiter, authRouter);
 // cette ligne, jamais avant — c'est le garde-fou central anti "route oubliee".
 app.use("/api", extractUser);
 
+// Licence suspendue/essai expire : bloque avant meme le RBAC par module (une
+// licence coupee ne doit voir aucune route tenant, quel que soit le role).
+// "/api/billing" reste exempte (voir SAFE_PATH_PREFIXES) pour permettre de
+// consulter son statut et se reabonner.
+app.use("/api", checkLicenceGate);
+
 app.use("/api/projects", projectsRouter);
 app.use("/api/prospects", prospectsRouter);
 app.use("/api/devis", devisRouter);
@@ -122,6 +144,7 @@ app.use("/api/vehicles", vehiclesRouter);
 app.use("/api/agenda", agendaRouter);
 app.use("/api/relances", relancesRouter);
 app.use("/api/ai-import", aiLimiter, aiImportRouter);
+app.use("/api/agent", aiLimiter, agentRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/parametres", parametresRouter);
 app.use("/api/transactions-bancaires", transactionsBancairesRouter);
@@ -141,6 +164,20 @@ app.use("/api/super-admin", superAdminRouter);
 app.use("/api/taches", tachesRouter);
 app.use("/api/cloture-comptable", clotureComptableRouter);
 app.use("/api/immobilisations", immobilisationsRouter);
+app.use("/api/appels-offres", appelsOffresRouter);
+app.use("/api/marches-publics", marchesPublicsRouter);
+app.use("/api/lots-marche", lotsMarcheRouter);
+app.use("/api/execution-marche", executionMarcheRouter);
+app.use("/api/doe-marche", doeMarcheRouter);
+app.use("/api/archives-decennales", archivesDecennalesRouter);
+app.use("/api/indices-bt", indicesBtRouter);
+app.use("/api/budgets-postes", budgetsPostesRouter);
+app.use("/api/tarifs-fournisseurs", tarifsFournisseursRouter);
+app.use("/api/gestion-dechets", gestionDechetsRouter);
+app.use("/api/bilan-carbone", bilanCarboneRouter);
+app.use("/api/bons-livraison", bonsLivraisonRouter);
+app.use("/api/demandes-achat", demandesAchatRouter);
+app.use("/api/sous-chantiers", sousChantiersRouter);
 
 // Fallback SPA : toute route non-/api sans fichier statique correspondant
 // (ex: /chantiers/abc-123, rafraichie directement) renvoie index.html —

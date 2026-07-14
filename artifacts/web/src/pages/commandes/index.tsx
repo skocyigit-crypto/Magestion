@@ -20,6 +20,14 @@ import {
   type CommandeInput,
   type CommandeStatut,
 } from "@/lib/commandes";
+import {
+  CONFORMITE_LABELS,
+  createBonLivraison,
+  listBonsLivraison,
+  validerBonLivraison,
+  type BonLivraisonConformite,
+  type BonLivraisonInput,
+} from "@/lib/bonsLivraison";
 
 const EMPTY_FORM: CommandeInput = { fournisseur: "", objet: "", montantHt: 0, tauxTva: 20 };
 
@@ -104,6 +112,41 @@ export default function CommandesPage() {
     await queryClient.invalidateQueries({ queryKey: ["commandes"] });
   }
 
+  const [blCommande, setBlCommande] = useState<Commande | null>(null);
+  const { data: bonsLivraison, isLoading: blLoading } = useQuery({
+    queryKey: ["bons-livraison", blCommande?.id],
+    queryFn: () => listBonsLivraison(blCommande!.id),
+    enabled: !!blCommande,
+  });
+  const EMPTY_BL_FORM: Omit<BonLivraisonInput, "commandeId"> = { pourcentageLivre: 100, conformite: "CONFORME" };
+  const [blForm, setBlForm] = useState<Omit<BonLivraisonInput, "commandeId">>(EMPTY_BL_FORM);
+  const [blSaving, setBlSaving] = useState(false);
+  const [blError, setBlError] = useState<string | null>(null);
+
+  const cumulLivre = (bonsLivraison ?? []).reduce((max, bl) => Math.max(max, Number(bl.pourcentageLivre)), 0);
+
+  async function handleCreateBl(e: React.FormEvent) {
+    e.preventDefault();
+    if (!blCommande) return;
+    setBlSaving(true);
+    setBlError(null);
+    try {
+      await createBonLivraison({ commandeId: blCommande.id, ...blForm });
+      await queryClient.invalidateQueries({ queryKey: ["bons-livraison", blCommande.id] });
+      setBlForm(EMPTY_BL_FORM);
+    } catch (err) {
+      setBlError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
+    } finally {
+      setBlSaving(false);
+    }
+  }
+
+  async function handleValiderBl(id: string) {
+    await validerBonLivraison(id);
+    await queryClient.invalidateQueries({ queryKey: ["bons-livraison", blCommande?.id] });
+    await queryClient.invalidateQueries({ queryKey: ["commandes"] });
+  }
+
   return (
     <Layout>
       <div className="mx-auto max-w-6xl px-6 py-8">
@@ -183,6 +226,7 @@ export default function CommandesPage() {
                   <td className="px-4 py-2">
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={() => openEdit(c)}>Modifier</Button>
+                      <Button variant="outline" size="sm" onClick={() => setBlCommande(c)}>Bons de livraison</Button>
                       <Button variant="outline" size="sm" onClick={() => handleToggleActive(c)}>
                         {c.active ? "Archiver" : "Reactiver"}
                       </Button>
@@ -282,6 +326,93 @@ export default function CommandesPage() {
             <Button type="submit" disabled={saving}>{saving ? "Enregistrement..." : editingId ? "Enregistrer" : "Creer"}</Button>
           </div>
         </form>
+      </Dialog>
+
+      <Dialog open={!!blCommande} onClose={() => setBlCommande(null)}>
+        <DialogHeader>
+          <DialogTitle>Bons de livraison — {blCommande?.fournisseur}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            Pourcentage cumule livre : <span className="font-semibold text-foreground">{cumulLivre}%</span>
+            {cumulLivre >= 100 && <span className="ml-2 text-emerald-400">Livraison complete</span>}
+          </p>
+          {blLoading && <p className="text-muted-foreground">Chargement...</p>}
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="px-3 py-2">N°</th>
+                  <th className="px-3 py-2 text-right">% livre</th>
+                  <th className="px-3 py-2 text-right">Montant HT</th>
+                  <th className="px-3 py-2">Conformite</th>
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Statut</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {(bonsLivraison ?? []).map((bl) => (
+                  <tr key={bl.id} className="border-b border-border last:border-0">
+                    <td className="px-3 py-2">{bl.numeroBl}</td>
+                    <td className="px-3 py-2 text-right">{bl.pourcentageLivre}%</td>
+                    <td className="px-3 py-2 text-right">{bl.montantLivreHt.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} €</td>
+                    <td className="px-3 py-2">{CONFORMITE_LABELS[bl.conformite]}</td>
+                    <td className="px-3 py-2">{new Date(bl.dateLivraison).toLocaleDateString("fr-FR")}</td>
+                    <td className="px-3 py-2">{bl.statut === "VALIDE" ? "Valide" : "Brouillon"}</td>
+                    <td className="px-3 py-2">
+                      {bl.statut === "BROUILLON" && <Button size="sm" variant="outline" onClick={() => handleValiderBl(bl.id)}>Valider</Button>}
+                    </td>
+                  </tr>
+                ))}
+                {!blLoading && (bonsLivraison ?? []).length === 0 && (
+                  <tr><td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">Aucun bon de livraison pour cette commande.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {cumulLivre < 100 && (
+            <form onSubmit={handleCreateBl} className="flex flex-col gap-3 border-t border-border pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="blPourcentage">Pourcentage cumule livre</Label>
+                  <Input
+                    id="blPourcentage"
+                    type="number"
+                    min={cumulLivre}
+                    max={100}
+                    step="0.01"
+                    required
+                    value={blForm.pourcentageLivre}
+                    onChange={(e) => setBlForm({ ...blForm, pourcentageLivre: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="blConformite">Conformite</Label>
+                  <select
+                    id="blConformite"
+                    className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+                    value={blForm.conformite ?? "CONFORME"}
+                    onChange={(e) => setBlForm({ ...blForm, conformite: e.target.value as BonLivraisonConformite })}
+                  >
+                    {Object.entries(CONFORMITE_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="blDate">Date de livraison</Label>
+                <Input id="blDate" type="date" value={blForm.dateLivraison ?? ""} onChange={(e) => setBlForm({ ...blForm, dateLivraison: e.target.value })} />
+              </div>
+              {blError && <p className="text-sm text-red-400">{blError}</p>}
+              <div className="flex justify-end">
+                <Button type="submit" size="sm" disabled={blSaving}>{blSaving ? "Enregistrement..." : "Enregistrer le bon de livraison"}</Button>
+              </div>
+            </form>
+          )}
+        </div>
       </Dialog>
     </Layout>
   );

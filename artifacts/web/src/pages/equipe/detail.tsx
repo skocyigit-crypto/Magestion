@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
@@ -12,8 +12,11 @@ import {
   STATUT_LABELS,
   archiverHabilitation,
   createEmployeeHabilitation,
+  fetchEmployeePhotoBlobUrl,
   getEmployee,
   listEmployeeHabilitations,
+  updateEmployee,
+  uploadEmployeePhoto,
   type HabilitationInput,
   type HabilitationType,
 } from "@/lib/employees";
@@ -40,6 +43,41 @@ export default function EmployeeDetailPage() {
   const { data: habilitations } = useQuery({ queryKey: ["employees", id, "habilitations"], queryFn: () => listEmployeeHabilitations(id) });
 
   const [habForm, setHabForm] = useState<HabilitationInput>(EMPTY_HABILITATION);
+  const [photoBlobUrl, setPhotoBlobUrl] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  useEffect(() => {
+    if (!employee?.photoUrl) {
+      setPhotoBlobUrl(null);
+      return;
+    }
+    let cancelled = false;
+    fetchEmployeePhotoBlobUrl(id).then((url) => { if (!cancelled) setPhotoBlobUrl(url); });
+    return () => { cancelled = true; };
+  }, [id, employee?.photoUrl]);
+
+  async function handleToggleConsent(checked: boolean) {
+    setPhotoError(null);
+    await updateEmployee(id, { consentementReconnaissanceFaciale: checked });
+    await queryClient.invalidateQueries({ queryKey: ["employees", id] });
+  }
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingPhoto(true);
+    setPhotoError(null);
+    try {
+      await uploadEmployeePhoto(id, file);
+      await queryClient.invalidateQueries({ queryKey: ["employees", id] });
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : "Erreur lors du televersement");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   async function handleAjouterHabilitation(e: React.FormEvent) {
     e.preventDefault();
@@ -148,6 +186,40 @@ export default function EmployeeDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="mt-6">
+          <CardHeader><CardTitle>Pointage par reconnaissance faciale</CardTitle></CardHeader>
+          <CardContent className="flex items-center gap-6">
+            {photoBlobUrl ? (
+              <img src={photoBlobUrl} alt="Photo de reference" className="h-20 w-20 rounded-full border border-border object-cover" />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-border text-xs text-muted-foreground">
+                Aucune photo
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={employee.consentementReconnaissanceFaciale}
+                  onChange={(e) => handleToggleConsent(e.target.checked)}
+                />
+                L'employe consent a la reconnaissance faciale pour le pointage
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Donnee biometrique (RGPD) : le consentement doit etre recueilli aupres de l'employe avant d'activer
+                cette option. Le retrait supprime immediatement la photo de reference.
+              </p>
+              {employee.consentementReconnaissanceFaciale && (
+                <div className="flex items-center gap-2">
+                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handlePhotoChange} disabled={uploadingPhoto} className="text-sm" />
+                  {uploadingPhoto && <span className="text-xs text-muted-foreground">Televersement...</span>}
+                </div>
+              )}
+              {photoError && <p className="text-sm text-red-400">{photoError}</p>}
+            </div>
+          </CardContent>
+        </Card>
 
         <Card className="mt-6">
           <CardHeader><CardTitle>Documents et certifications (RH)</CardTitle></CardHeader>

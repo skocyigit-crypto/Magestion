@@ -4,7 +4,7 @@ import { usersTable } from "./users.js";
 
 export const documentTypeEnum = pgEnum("document_type", ["CONTRAT", "ASSURANCE", "PERMIS", "FACTURE", "PLAN", "AUTRE"]);
 export const documentEntityTypeEnum = pgEnum("document_entity_type", [
-  "PROJECT", "EMPLOYEE", "VEHICLE", "SOUS_TRAITANT", "GENERAL",
+  "PROJECT", "EMPLOYEE", "VEHICLE", "SOUS_TRAITANT", "GENERAL", "APPEL_OFFRE", "MARCHE_PUBLIC",
 ]);
 
 export const documentsTable = pgTable("documents", {

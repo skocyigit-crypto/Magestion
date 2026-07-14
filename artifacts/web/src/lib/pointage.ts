@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getToken } from "@/lib/api";
 
 export interface Pointage {
   id: string;
@@ -35,6 +35,34 @@ export interface PointageUpdateInput {
 // "afficher les archives" se fait donc cote client sur le champ `active`.
 export function updatePointage(id: string, input: PointageUpdateInput) {
   return apiFetch<Pointage>(`/pointage/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export interface ReconnaissanceFacialeResult {
+  matched: boolean;
+  confidence: number;
+  employee?: { id: string; nom: string; prenom: string };
+  action?: "arrivee" | "depart";
+  pointage?: Pointage;
+}
+
+const API_BASE = `${import.meta.env.VITE_API_URL ?? ""}/api`;
+
+// FormData (photo capturee) : apiFetch ne gere que le JSON, meme raison que
+// uploadLogo/uploadEmployeePhoto.
+export async function pointerParReconnaissanceFaciale(photo: Blob): Promise<ReconnaissanceFacialeResult> {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append("photo", photo, "capture.jpg");
+  const res = await fetch(`${API_BASE}/pointage/reconnaissance-faciale`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(body.error ?? "Erreur reconnaissance faciale");
+  }
+  return res.json();
 }
 
 // <input type="datetime-local"> attend "YYYY-MM-DDTHH:mm" (sans secondes ni

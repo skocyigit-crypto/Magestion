@@ -1,9 +1,14 @@
 import { Router } from "express";
+import multer from "multer";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { db, employeesTable, employeeHabilitationsTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
+import { storageAdapter } from "../lib/storage.js";
+import { IMAGE_MIME_TO_EXT, IMAGE_EXT_TO_CONTENT_TYPE, detectImageExt } from "../lib/imageValidation.js";
 
 export const employeesRouter = Router();
 employeesRouter.use(requireModuleAccess("employees"));
@@ -29,6 +34,7 @@ const employeeInputSchema = z.object({
 const employeeUpdateSchema = employeeInputSchema.partial().extend({
   statut: z.enum(["SUR_CHANTIER", "EN_ROUTE", "ABSENT", "INDISPONIBLE", "CONGE"]).optional(),
   active: z.boolean().optional(),
+  consentementReconnaissanceFaciale: z.boolean().optional(),
 });
 
 employeesRouter.get("/", async (req, res) => {
@@ -206,11 +212,26 @@ employeesRouter.patch("/:id", async (req, res) => {
     return;
   }
 
-  const { tauxHoraire, ...rest } = parsed.data;
+  const { tauxHoraire, consentementReconnaissanceFaciale, ...rest } = parsed.data;
+
+  // Retrait du consentement = suppression immediate de la photo de reference
+  // (donnee biometrique) : la conserver sans consentement actif n'a pas de
+  // base legale, contrairement aux autres champs employe.
+  let photoUrlUpdate: { photoUrl: null } | undefined;
+  if (consentementReconnaissanceFaciale === false) {
+    const [existing] = await db.select().from(employeesTable).where(and(eq(employeesTable.id, req.params.id), eq(employeesTable.licenceId, licenceId))).limit(1);
+    if (existing?.photoUrl) {
+      await storageAdapter.remove(existing.photoUrl);
+      photoUrlUpdate = { photoUrl: null };
+    }
+  }
+
   const [updated] = await db
     .update(employeesTable)
     .set({
       ...rest,
+      ...(consentementReconnaissanceFaciale !== undefined ? { consentementReconnaissanceFaciale } : {}),
+      ...photoUrlUpdate,
       ...(tauxHoraire !== undefined ? { tauxHoraire: tauxHoraire.toString() } : {}),
       updatedAt: new Date(),
     })
@@ -222,4 +243,74 @@ employeesRouter.patch("/:id", async (req, res) => {
     return;
   }
   res.json(updated);
+});
+
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 Mo
+  fileFilter: (_req, file, cb) => {
+    if (!IMAGE_MIME_TO_EXT[file.mimetype]) {
+      cb(new Error("Format non supporte (PNG, JPEG ou WEBP uniquement)"));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+// Photo de reference pour la reconnaissance faciale (voir routes/faceRecognition.ts).
+// Le consentement doit avoir ete enregistre AVANT l'upload — jamais l'inverse,
+// pour eviter qu'une photo biometrique transite/soit stockee sans base legale.
+employeesRouter.post("/:id/photo", photoUpload.single("photo"), async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  if (!req.file) {
+    res.status(400).json({ error: "Fichier requis" });
+    return;
+  }
+
+  // req.params.id degrade en `string | string[]` ici a cause du multer chaine
+  // en argument positionnel (meme quirk Express 5 documente dans lib/rbac.ts).
+  const employeeId = req.params.id as string;
+  const [employee] = await db.select().from(employeesTable).where(and(eq(employeesTable.id, employeeId), eq(employeesTable.licenceId, licenceId))).limit(1);
+  if (!employee) {
+    res.status(404).json({ error: "Employe introuvable" });
+    return;
+  }
+  if (!employee.consentementReconnaissanceFaciale) {
+    res.status(403).json({ error: "Consentement a la reconnaissance faciale requis avant l'ajout d'une photo de reference" });
+    return;
+  }
+
+  const ext = detectImageExt(req.file.buffer);
+  if (!ext) {
+    res.status(400).json({ error: "Fichier invalide : le contenu ne correspond a aucun format image supporte (PNG, JPEG, WEBP)" });
+    return;
+  }
+
+  const photoUrl = join(licenceId, "employes", `${employee.id}-${randomUUID()}.${ext}`);
+  await storageAdapter.save(photoUrl, req.file.buffer);
+  if (employee.photoUrl) await storageAdapter.remove(employee.photoUrl);
+
+  const [updated] = await db
+    .update(employeesTable)
+    .set({ photoUrl, updatedAt: new Date() })
+    .where(eq(employeesTable.id, employee.id))
+    .returning();
+  res.status(201).json(updated);
+});
+
+employeesRouter.get("/:id/photo", async (req, res) => {
+  const licenceId = requireLicenceId(req.user!, res);
+  if (!licenceId) return;
+
+  const [employee] = await db.select().from(employeesTable).where(and(eq(employeesTable.id, req.params.id), eq(employeesTable.licenceId, licenceId))).limit(1);
+  if (!employee?.photoUrl) {
+    res.status(404).json({ error: "Aucune photo" });
+    return;
+  }
+
+  const ext = employee.photoUrl.split(".").pop() ?? "";
+  res.setHeader("Content-Type", IMAGE_EXT_TO_CONTENT_TYPE[ext] ?? "application/octet-stream");
+  storageAdapter.sendFile(employee.photoUrl, res);
 });

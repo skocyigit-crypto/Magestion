@@ -15,6 +15,12 @@ import {
   type ArticleCategorie,
   type ArticleInput,
 } from "@/lib/articles";
+import { listFournisseurs } from "@/lib/fournisseurs";
+import {
+  listTarifsFournisseurs,
+  upsertTarifFournisseur,
+  type TarifFournisseurInput,
+} from "@/lib/tarifsFournisseurs";
 
 const EMPTY_FORM: ArticleInput = { code: "", libelle: "", unite: "u", categorie: "DIVERS", prixUnitaireHt: 0 };
 
@@ -84,6 +90,36 @@ export default function ArticlesPage() {
     await queryClient.invalidateQueries({ queryKey: ["articles"] });
   }
 
+  const [tarifsArticle, setTarifsArticle] = useState<Article | null>(null);
+  const { data: fournisseurs } = useQuery({ queryKey: ["fournisseurs"], queryFn: () => listFournisseurs() });
+  const { data: tarifs, isLoading: tarifsLoading } = useQuery({
+    queryKey: ["tarifs-fournisseurs", tarifsArticle?.id],
+    queryFn: () => listTarifsFournisseurs({ articleId: tarifsArticle!.id }),
+    enabled: !!tarifsArticle,
+  });
+  const EMPTY_TARIF_FORM = { fournisseurId: "", prixUnitaireHt: 0 };
+  const [tarifForm, setTarifForm] = useState<Omit<TarifFournisseurInput, "articleId">>(EMPTY_TARIF_FORM);
+  const [tarifSaving, setTarifSaving] = useState(false);
+  const [tarifError, setTarifError] = useState<string | null>(null);
+
+  const fournisseurNom = (id: string) => (fournisseurs ?? []).find((f) => f.id === id)?.nom ?? "—";
+
+  async function handleAddTarif(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tarifsArticle) return;
+    setTarifSaving(true);
+    setTarifError(null);
+    try {
+      await upsertTarifFournisseur({ articleId: tarifsArticle.id, ...tarifForm });
+      await queryClient.invalidateQueries({ queryKey: ["tarifs-fournisseurs", tarifsArticle.id] });
+      setTarifForm(EMPTY_TARIF_FORM);
+    } catch (err) {
+      setTarifError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
+    } finally {
+      setTarifSaving(false);
+    }
+  }
+
   return (
     <Layout>
       <div className="mx-auto max-w-5xl px-6 py-8">
@@ -138,6 +174,7 @@ export default function ArticlesPage() {
                   <td className="px-4 py-2">
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={() => openEdit(a)}>Modifier</Button>
+                      <Button variant="outline" size="sm" onClick={() => setTarifsArticle(a)}>Tarifs fournisseurs</Button>
                       <Button variant="outline" size="sm" onClick={() => handleToggleActive(a)}>
                         {a.active ? "Archiver" : "Reactiver"}
                       </Button>
@@ -204,6 +241,101 @@ export default function ArticlesPage() {
             <Button type="submit" disabled={saving}>{saving ? "Enregistrement..." : editingId ? "Enregistrer" : "Creer"}</Button>
           </div>
         </form>
+      </Dialog>
+
+      <Dialog open={!!tarifsArticle} onClose={() => setTarifsArticle(null)}>
+        <DialogHeader>
+          <DialogTitle>Tarifs fournisseurs — {tarifsArticle?.libelle}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            Trie par prix croissant — la premiere ligne est le fournisseur le moins cher pour cet article.
+          </p>
+          {tarifsLoading && <p className="text-muted-foreground">Chargement...</p>}
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="px-3 py-2">Fournisseur</th>
+                  <th className="px-3 py-2 text-right">Prix HT</th>
+                  <th className="px-3 py-2">Reference</th>
+                  <th className="px-3 py-2">Delai</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(tarifs ?? []).map((t, i) => (
+                  <tr key={t.id} className="border-b border-border last:border-0">
+                    <td className="px-3 py-2">{fournisseurNom(t.fournisseurId)}</td>
+                    <td className={`px-3 py-2 text-right font-medium ${i === 0 ? "text-emerald-400" : ""}`}>
+                      {Number(t.prixUnitaireHt).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €
+                    </td>
+                    <td className="px-3 py-2">{t.referenceFournisseur || "—"}</td>
+                    <td className="px-3 py-2">{t.delaiLivraisonJours ? `${t.delaiLivraisonJours} j` : "—"}</td>
+                  </tr>
+                ))}
+                {!tarifsLoading && (tarifs ?? []).length === 0 && (
+                  <tr><td colSpan={4} className="px-3 py-4 text-center text-muted-foreground">Aucun tarif fournisseur pour cet article.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <form onSubmit={handleAddTarif} className="flex flex-col gap-3 border-t border-border pt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="tarifFournisseurId">Fournisseur</Label>
+                <select
+                  id="tarifFournisseurId"
+                  required
+                  className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+                  value={tarifForm.fournisseurId}
+                  onChange={(e) => setTarifForm({ ...tarifForm, fournisseurId: e.target.value })}
+                >
+                  <option value="">Selectionner...</option>
+                  {(fournisseurs ?? []).map((f) => (
+                    <option key={f.id} value={f.id}>{f.nom}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="tarifPrix">Prix unitaire HT</Label>
+                <Input
+                  id="tarifPrix"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  required
+                  value={tarifForm.prixUnitaireHt}
+                  onChange={(e) => setTarifForm({ ...tarifForm, prixUnitaireHt: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="tarifReference">Reference fournisseur</Label>
+                <Input
+                  id="tarifReference"
+                  value={tarifForm.referenceFournisseur ?? ""}
+                  onChange={(e) => setTarifForm({ ...tarifForm, referenceFournisseur: e.target.value })}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="tarifDelai">Delai de livraison (jours)</Label>
+                <Input
+                  id="tarifDelai"
+                  type="number"
+                  min={0}
+                  value={tarifForm.delaiLivraisonJours ?? ""}
+                  onChange={(e) => setTarifForm({ ...tarifForm, delaiLivraisonJours: e.target.value ? Number(e.target.value) : undefined })}
+                />
+              </div>
+            </div>
+            {tarifError && <p className="text-sm text-red-400">{tarifError}</p>}
+            <div className="flex justify-end">
+              <Button type="submit" size="sm" disabled={tarifSaving}>{tarifSaving ? "Enregistrement..." : "Ajouter / mettre a jour"}</Button>
+            </div>
+          </form>
+        </div>
       </Dialog>
     </Layout>
   );

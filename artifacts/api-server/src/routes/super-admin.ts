@@ -3,6 +3,7 @@ import { z } from "zod";
 import { count, eq } from "drizzle-orm";
 import { db, licencesTable, usersTable } from "@magestion/db";
 import { isPlatformOwner } from "../lib/tenantScope.js";
+import { invalidateLicenceGateCache } from "../middleware/checkLicenceGate.js";
 
 export const superAdminRouter = Router();
 
@@ -92,5 +93,6 @@ superAdminRouter.patch("/licences/:id", async (req, res) => {
     res.status(404).json({ error: "Licence introuvable" });
     return;
   }
+  invalidateLicenceGateCache(updated.id);
   res.json(updated);
 });

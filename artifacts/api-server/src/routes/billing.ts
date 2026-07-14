@@ -5,6 +5,7 @@ import { db, licencesTable } from "@magestion/db";
 import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
 import { STRIPE_SIMULATION_MODE, priceIdForPlan, stripe, type PlanKey } from "../lib/stripe-client.js";
+import { invalidateLicenceGateCache } from "../middleware/checkLicenceGate.js";
 
 export const billingRouter = Router();
 // "billing" absent de la matrice RBAC -> seul SUPER_ADMIN passe (bypass) —
@@ -82,6 +83,7 @@ billingRouter.post("/checkout", async (req, res) => {
       .set({ plan: parsed.data.planKey, status: "ACTIF", updatedAt: new Date() })
       .where(eq(licencesTable.id, licenceId))
       .returning();
+    invalidateLicenceGateCache(licenceId);
     res.json({ simulation: true, url: null, plan: updated.plan });
     return;
   }

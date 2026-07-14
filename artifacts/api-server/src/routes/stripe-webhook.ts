@@ -2,6 +2,7 @@ import { Router } from "express";
 import { eq } from "drizzle-orm";
 import { db, licencesTable, stripeEventsProcessedTable } from "@magestion/db";
 import { stripe } from "../lib/stripe-client.js";
+import { invalidateLicenceGateCache } from "../middleware/checkLicenceGate.js";
 import type Stripe from "stripe";
 
 export const stripeWebhookRouter = Router();
@@ -59,15 +60,18 @@ stripeWebhookRouter.post("/", async (req, res) => {
             updatedAt: new Date(),
           })
           .where(eq(licencesTable.id, licenceId));
+        invalidateLicenceGateCache(licenceId);
       }
       break;
     }
     case "customer.subscription.deleted": {
       const subscription = event.data.object as Stripe.Subscription;
-      await db
+      const updated = await db
         .update(licencesTable)
         .set({ status: "SUSPENDU", updatedAt: new Date() })
-        .where(eq(licencesTable.stripeSubscriptionId, subscription.id));
+        .where(eq(licencesTable.stripeSubscriptionId, subscription.id))
+        .returning();
+      updated.forEach((l) => invalidateLicenceGateCache(l.id));
       break;
     }
     case "invoice.payment_failed": {
@@ -75,10 +79,12 @@ stripeWebhookRouter.post("/", async (req, res) => {
       const subscriptionRef = invoice.parent?.subscription_details?.subscription;
       const subscriptionId = typeof subscriptionRef === "string" ? subscriptionRef : subscriptionRef?.id;
       if (subscriptionId) {
-        await db
+        const updated = await db
           .update(licencesTable)
           .set({ status: "SUSPENDU", updatedAt: new Date() })
-          .where(eq(licencesTable.stripeSubscriptionId, subscriptionId));
+          .where(eq(licencesTable.stripeSubscriptionId, subscriptionId))
+          .returning();
+        updated.forEach((l) => invalidateLicenceGateCache(l.id));
       }
       break;
     }

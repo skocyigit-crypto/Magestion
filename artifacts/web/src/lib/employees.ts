@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getToken } from "@/lib/api";
 
 export type EmployeeRole =
   | "CHEF_CHANTIER" | "CONDUCTEUR_TRAVAUX" | "MACON" | "ELECTRICIEN" | "PLOMBIER"
@@ -17,6 +17,8 @@ export interface Employee {
   statut: EmployeeStatut;
   anonymise: boolean;
   active: boolean;
+  consentementReconnaissanceFaciale: boolean;
+  photoUrl: string | null;
 }
 
 export interface EmployeeInput {
@@ -46,10 +48,43 @@ export function updateEmployeeStatut(id: string, statut: EmployeeStatut) {
 
 export interface EmployeeUpdateInput extends Partial<EmployeeInput> {
   active?: boolean;
+  consentementReconnaissanceFaciale?: boolean;
 }
 
 export function updateEmployee(id: string, input: EmployeeUpdateInput) {
   return apiFetch<Employee>(`/employees/${id}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+const API_BASE = `${import.meta.env.VITE_API_URL ?? ""}/api`;
+
+// Meme pattern que uploadLogo (lib/parametres.ts) : FormData, apiFetch ne
+// gere que le JSON.
+export async function uploadEmployeePhoto(employeeId: string, file: File): Promise<Employee> {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append("photo", file);
+  const res = await fetch(`${API_BASE}/employees/${employeeId}/photo`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(body.error ?? "Erreur lors du televersement de la photo");
+  }
+  return res.json();
+}
+
+// Photo servie par une route authentifiee (isolation tenant) — meme raison
+// que fetchLogoBlobUrl (lib/parametres.ts) : pas de <img src> direct possible.
+export async function fetchEmployeePhotoBlobUrl(employeeId: string): Promise<string | null> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/employees/${employeeId}/photo`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) return null;
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
 }
 
 export const ROLE_LABELS: Record<EmployeeRole, string> = {

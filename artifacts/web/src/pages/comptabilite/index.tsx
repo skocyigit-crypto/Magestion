@@ -30,10 +30,11 @@ import {
   type ImmobilisationStatut,
   type PlanAmortissement,
 } from "@/lib/immobilisations";
+import { createBudgetPoste, listBudgetsRealise, type BudgetPosteInput } from "@/lib/budgetsPostes";
 
 const fmt = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-type Tab = "journal" | "balance" | "plan" | "lettrage" | "tva" | "cloture" | "immobilisations";
+type Tab = "journal" | "balance" | "plan" | "lettrage" | "tva" | "cloture" | "immobilisations" | "budgets";
 
 export default function ComptabilitePage() {
   const queryClient = useQueryClient();
@@ -187,6 +188,39 @@ export default function ComptabilitePage() {
     setPlanOuvert(await getPlanAmortissement(id));
   }
 
+  const [exerciceBudget, setExerciceBudget] = useState<string>(String(new Date().getFullYear()));
+  const { data: budgetsRealise, isLoading: budgetsLoading, isError: budgetsError } = useQuery({
+    queryKey: ["budgets-postes", "realise", exerciceBudget],
+    queryFn: () => listBudgetsRealise(Number(exerciceBudget)),
+    enabled: tab === "budgets",
+  });
+  const [isBudgetOpen, setIsBudgetOpen] = useState(false);
+  const EMPTY_BUDGET_FORM: BudgetPosteInput = { compteNum: "", exercice: new Date().getFullYear(), montantBudgeteHt: 0 };
+  const [budgetForm, setBudgetForm] = useState<BudgetPosteInput>(EMPTY_BUDGET_FORM);
+  const [budgetSaving, setBudgetSaving] = useState(false);
+  const [budgetError, setBudgetError] = useState<string | null>(null);
+
+  function openCreateBudget() {
+    setBudgetForm({ ...EMPTY_BUDGET_FORM, exercice: Number(exerciceBudget) || new Date().getFullYear() });
+    setBudgetError(null);
+    setIsBudgetOpen(true);
+  }
+
+  async function handleCreateBudget(e: React.FormEvent) {
+    e.preventDefault();
+    setBudgetSaving(true);
+    setBudgetError(null);
+    try {
+      await createBudgetPoste(budgetForm);
+      await queryClient.invalidateQueries({ queryKey: ["budgets-postes"] });
+      setIsBudgetOpen(false);
+    } catch (err) {
+      setBudgetError(err instanceof Error ? err.message : "Erreur lors de l'enregistrement");
+    } finally {
+      setBudgetSaving(false);
+    }
+  }
+
   const { data: journal, isLoading: journalLoading, isError: journalError } = useQuery({ queryKey: ["comptabilite", "journal"], queryFn: listJournal });
   const { data: balance, isLoading: balanceLoading, isError: balanceError } = useQuery({
     queryKey: ["comptabilite", "balance", exerciceNum],
@@ -277,6 +311,9 @@ export default function ComptabilitePage() {
           </Button>
           <Button variant={tab === "immobilisations" ? "default" : "outline"} size="sm" onClick={() => setTab("immobilisations")}>
             Immobilisations
+          </Button>
+          <Button variant={tab === "budgets" ? "default" : "outline"} size="sm" onClick={() => setTab("budgets")}>
+            Budgets par poste
           </Button>
         </div>
 
@@ -663,6 +700,54 @@ export default function ComptabilitePage() {
             </div>
           </>
         )}
+
+        {tab === "budgets" && (
+          <>
+            <div className="mb-4 flex items-end justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="exerciceBudget" className="text-xs text-muted-foreground">Exercice</label>
+                <Input id="exerciceBudget" className="w-28" value={exerciceBudget} onChange={(e) => setExerciceBudget(e.target.value)} />
+              </div>
+              <Button size="sm" onClick={openCreateBudget}>Nouveau budget</Button>
+            </div>
+
+            <p className="mb-4 text-sm text-muted-foreground">
+              Budget analytique par compte, distinct du budget par chantier — compare le montant budgete au realise
+              (somme des ecritures du compte sur l'exercice).
+            </p>
+
+            {budgetsError && <p className="mb-4 rounded-md border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-400">Erreur lors du chargement des donnees.</p>}
+            {budgetsLoading && <p className="text-muted-foreground">Chargement...</p>}
+
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="px-3 py-2">Compte</th>
+                    <th className="px-3 py-2 text-right">Budgete HT</th>
+                    <th className="px-3 py-2 text-right">Realise HT</th>
+                    <th className="px-3 py-2 text-right">Ecart</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(budgetsRealise ?? []).map((b) => (
+                    <tr key={b.compteNum} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-3 py-2">{b.compteNum} — {b.compteLib}</td>
+                      <td className="px-3 py-2 text-right">{b.budgetId ? `${fmt(b.montantBudgeteHt)} €` : "—"}</td>
+                      <td className="px-3 py-2 text-right">{fmt(b.montantRealiseHt)} €</td>
+                      <td className={`px-3 py-2 text-right font-medium ${b.ecart < 0 ? "text-red-400" : "text-emerald-400"}`}>
+                        {b.budgetId ? `${fmt(b.ecart)} €` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                  {!budgetsLoading && !budgetsError && (budgetsRealise ?? []).length === 0 && (
+                    <tr><td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">Aucun budget ni ecriture pour cet exercice.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       <Dialog open={isImmoOpen} onClose={() => setIsImmoOpen(false)}>
@@ -727,6 +812,55 @@ export default function ComptabilitePage() {
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setIsImmoOpen(false)}>Annuler</Button>
             <Button type="submit" disabled={immoSaving}>{immoSaving ? "Enregistrement..." : "Creer"}</Button>
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog open={isBudgetOpen} onClose={() => setIsBudgetOpen(false)}>
+        <DialogHeader><DialogTitle>Nouveau budget par poste</DialogTitle></DialogHeader>
+        <form onSubmit={handleCreateBudget} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="budgetCompteNum">Compte</Label>
+            <select
+              id="budgetCompteNum"
+              required
+              className="h-10 rounded-md border border-border bg-transparent px-3 text-sm"
+              value={budgetForm.compteNum}
+              onChange={(e) => setBudgetForm({ ...budgetForm, compteNum: e.target.value })}
+            >
+              <option value="">Selectionner...</option>
+              {(planComptable ?? []).map((c) => (
+                <option key={c.compteNum} value={c.compteNum}>{c.compteNum} — {c.libelle}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="budgetExercice">Exercice</Label>
+              <Input
+                id="budgetExercice"
+                type="number"
+                required
+                value={budgetForm.exercice}
+                onChange={(e) => setBudgetForm({ ...budgetForm, exercice: Number(e.target.value) })}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="budgetMontant">Montant budgete HT</Label>
+              <Input
+                id="budgetMontant"
+                type="number"
+                step="0.01"
+                required
+                value={budgetForm.montantBudgeteHt}
+                onChange={(e) => setBudgetForm({ ...budgetForm, montantBudgeteHt: Number(e.target.value) })}
+              />
+            </div>
+          </div>
+          {budgetError && <p className="text-sm text-red-400">{budgetError}</p>}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setIsBudgetOpen(false)}>Annuler</Button>
+            <Button type="submit" disabled={budgetSaving}>{budgetSaving ? "Enregistrement..." : "Creer"}</Button>
           </div>
         </form>
       </Dialog>

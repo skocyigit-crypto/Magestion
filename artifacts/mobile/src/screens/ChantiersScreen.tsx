@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
@@ -30,6 +30,7 @@ const STATUT_COLORS: Record<Project["statut"], string> = {
 
 export default function ChantiersScreen() {
   const { user, logout } = useAuth();
+  const navigation = useNavigation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -68,9 +69,15 @@ export default function ChantiersScreen() {
           <Text style={styles.title}>Chantiers</Text>
           {user && <Text style={styles.userInfo}>{user.nom}</Text>}
         </View>
-        <TouchableOpacity onPress={logout}>
-          <Text style={styles.logout}>Deconnexion</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {/* @ts-expect-error -- navigation typee globalement, pas de RootParamList declare (app minimale, 2 ecrans) */}
+          <TouchableOpacity onPress={() => navigation.navigate("Pointage")}>
+            <Text style={styles.navLink}>Pointage</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={logout}>
+            <Text style={styles.logout}>Deconnexion</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading && <ActivityIndicator style={styles.loader} color="#f59e0b" />}
@@ -111,6 +118,8 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 24, fontWeight: "700", color: "#f3f4f6" },
   userInfo: { fontSize: 13, color: "#9ca3af", marginTop: 2 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 16 },
+  navLink: { color: "#f59e0b", fontSize: 14 },
   logout: { color: "#f87171", fontSize: 14 },
   loader: { marginTop: 24 },
   error: { color: "#f87171", textAlign: "center", marginTop: 12 },

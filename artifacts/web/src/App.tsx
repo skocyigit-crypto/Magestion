@@ -40,12 +40,21 @@ const VehiculesPage = lazy(() => import("@/pages/vehicules/index"));
 const AgendaCommercialPage = lazy(() => import("@/pages/agenda-commercial/index"));
 const RelancesPage = lazy(() => import("@/pages/relances/index"));
 const ImportIaPage = lazy(() => import("@/pages/import-ia/index"));
+const AssistantIaPage = lazy(() => import("@/pages/assistant-ia/index"));
 const UtilisateursPage = lazy(() => import("@/pages/utilisateurs/index"));
 const ParametresPage = lazy(() => import("@/pages/parametres/index"));
 const RgpdPage = lazy(() => import("@/pages/rgpd/index"));
 const NotesDeFraisPage = lazy(() => import("@/pages/notes-de-frais/index"));
 const LocationsMaterielPage = lazy(() => import("@/pages/locations-materiel/index"));
 const AnalyticsCommercialPage = lazy(() => import("@/pages/analytics-commercial/index"));
+const AppelsOffresPage = lazy(() => import("@/pages/appels-offres/index"));
+const MarchesPublicsPage = lazy(() => import("@/pages/marches-publics/index"));
+const MarcheDetailPage = lazy(() => import("@/pages/marches-publics/detail"));
+const ArchivesDecennalesPage = lazy(() => import("@/pages/archives-decennales/index"));
+const IndicesBtPage = lazy(() => import("@/pages/indices-bt/index"));
+const GestionDechetsPage = lazy(() => import("@/pages/gestion-dechets/index"));
+const BilanCarbonePage = lazy(() => import("@/pages/bilan-carbone/index"));
+const DemandesAchatPage = lazy(() => import("@/pages/demandes-achat/index"));
 
 export default function App() {
   return (
@@ -89,12 +98,21 @@ export default function App() {
         <Route path="/agenda-commercial" component={AgendaCommercialPage} />
         <Route path="/relances" component={RelancesPage} />
         <Route path="/import-ia" component={ImportIaPage} />
+        <Route path="/assistant-ia" component={AssistantIaPage} />
         <Route path="/utilisateurs" component={UtilisateursPage} />
         <Route path="/parametres" component={ParametresPage} />
         <Route path="/rgpd" component={RgpdPage} />
         <Route path="/notes-de-frais" component={NotesDeFraisPage} />
         <Route path="/locations-materiel" component={LocationsMaterielPage} />
         <Route path="/analytics-commercial" component={AnalyticsCommercialPage} />
+        <Route path="/appels-offres" component={AppelsOffresPage} />
+        <Route path="/marches-publics" component={MarchesPublicsPage} />
+        <Route path="/marches-publics/:id" component={MarcheDetailPage} />
+        <Route path="/archives-decennales" component={ArchivesDecennalesPage} />
+        <Route path="/indices-bt" component={IndicesBtPage} />
+        <Route path="/gestion-dechets" component={GestionDechetsPage} />
+        <Route path="/bilan-carbone" component={BilanCarbonePage} />
+        <Route path="/demandes-achat" component={DemandesAchatPage} />
         <Route>404 — Page introuvable</Route>
       </Switch>
     </Suspense>

@@ -35,6 +35,12 @@ export const employeesTable = pgTable("employees", {
   statut: employeeStatutEnum("statut").notNull().default("ABSENT"),
   // Irreversible (droit a l'effacement RGPD) — voir routes/rgpd.ts.
   anonymise: boolean("anonymise").notNull().default(false),
+  // Donnee biometrique (voir routes/faceRecognition.ts) : consentement explicite
+  // requis AVANT tout upload de photoUrl (verifie server-side, jamais de
+  // defaut a true) — retrait revocable a tout moment via PATCH /employees/:id,
+  // distinct de anonymise (RGPD generique) car regi par une base legale propre.
+  consentementReconnaissanceFaciale: boolean("consentement_reconnaissance_faciale").notNull().default(false),
+  photoUrl: text("photo_url"),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

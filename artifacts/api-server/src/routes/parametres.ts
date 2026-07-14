@@ -9,6 +9,7 @@ import { requireLicenceId } from "../lib/tenantScope.js";
 import { requireModuleAccess } from "../lib/rbac.js";
 import { isValidSiret } from "../lib/siret.js";
 import { storageAdapter } from "../lib/storage.js";
+import { IMAGE_MIME_TO_EXT, IMAGE_EXT_TO_CONTENT_TYPE, detectImageExt } from "../lib/imageValidation.js";
 
 export const parametresRouter = Router();
 
@@ -65,33 +66,11 @@ parametresRouter.patch("/", async (req, res) => {
   res.json(updated);
 });
 
-const LOGO_MIME_TO_EXT: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/webp": "webp",
-};
-
-const LOGO_EXT_TO_CONTENT_TYPE: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  webp: "image/webp",
-};
-
-// Le mimetype declare par le client (header multipart) est trivialement
-// falsifiable — on verifie les "magic bytes" reels du fichier pour confirmer
-// que le contenu correspond vraiment au type annonce avant de le stocker.
-function detectImageExt(buffer: Buffer): string | null {
-  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "png";
-  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "jpg";
-  if (buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP") return "webp";
-  return null;
-}
-
 const logoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 }, // 2 Mo
   fileFilter: (_req, file, cb) => {
-    if (!LOGO_MIME_TO_EXT[file.mimetype]) {
+    if (!IMAGE_MIME_TO_EXT[file.mimetype]) {
       cb(new Error("Format non supporte (PNG, JPEG ou WEBP uniquement)"));
       return;
     }
@@ -145,6 +124,6 @@ parametresRouter.get("/logo", async (req, res) => {
   }
 
   const ext = licence.logoChemin.split(".").pop() ?? "";
-  res.setHeader("Content-Type", LOGO_EXT_TO_CONTENT_TYPE[ext] ?? "application/octet-stream");
+  res.setHeader("Content-Type", IMAGE_EXT_TO_CONTENT_TYPE[ext] ?? "application/octet-stream");
   storageAdapter.sendFile(licence.logoChemin, res);
 });
